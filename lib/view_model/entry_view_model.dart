@@ -101,7 +101,7 @@ class EntryViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final url = 'https://trainfetch.chandugeesala0.workers.dev/$trainNumber';
+      final url = 'https://pongal.sardarspy4.workers.dev/$trainNumber';
 
       print('🚀 Fetching train data from: $url');
 
@@ -156,8 +156,8 @@ class EntryViewModel extends ChangeNotifier {
         return false;
       }
     } catch (e) {
-      _errorMessage = 'Error: ${e.toString()}';
-      print('❌ Exception: $e');
+      _errorMessage = 'Error: Please Try Again';
+      print('❌ Exception');
       _isLoadingStations = false;
       notifyListeners();
       return false;
@@ -235,7 +235,7 @@ class EntryViewModel extends ChangeNotifier {
         return false;
       }
     } catch (e) {
-      _errorMessage = 'Error: $e';
+      _errorMessage = 'Error:Please Try Again';
       _isFetchingComposition = false;
       notifyListeners();
       return false;
@@ -310,8 +310,8 @@ class EntryViewModel extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      print('❌ Search Exception: $e');
-      _errorMessage = 'Search failed: $e';
+      print('❌ Search Exception ');
+      _errorMessage = 'Search failed ';
       _isSearchingVacancy = false;
       notifyListeners();
       return false;
@@ -376,7 +376,7 @@ class EntryViewModel extends ChangeNotifier {
 
       await Future.delayed(const Duration(milliseconds: 300));
     } catch (e) {
-      print('❌ Error fetching ${coach['coachName']}: $e');
+      print('❌ Error fetching ${coach['coachName']} ');
     }
   }
 

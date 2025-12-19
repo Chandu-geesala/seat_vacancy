@@ -4,27 +4,35 @@ import 'package:seat_vacancy/view_model/entry_view_model.dart';
 import 'entry_page.dart';
 
 void main() {
-  runApp(const TrainVacancyApp());
+  runApp(const KaliRailSeatApp());
 }
 
-class TrainVacancyApp extends StatelessWidget {
-  const TrainVacancyApp({Key? key}) : super(key: key);
+/// KaliRailSeat App
+/// Purpose:
+/// Check which train seats are actually vacant between your boarding
+/// and destination stations, even after the reservation chart is prepared.
+class KaliRailSeatApp extends StatelessWidget {
+  const KaliRailSeatApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => EntryViewModel(),
       child: MaterialApp(
-        title: 'Train Vacancy Checker',
+        title: 'KaliRailSeat',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          primarySwatch: Colors.blue,
-          scaffoldBackgroundColor: const Color(0xFFF5F7FA),
           useMaterial3: true,
+
+          /// Brand colors
           colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF6366F1),
+            seedColor: const Color(0xFF1E40AF), // Rail Blue
             brightness: Brightness.light,
           ),
+
+          scaffoldBackgroundColor: const Color(0xFFF5F7FA),
+
+          /// Input fields (station search, train number, etc.)
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
             fillColor: Colors.white,
@@ -38,13 +46,24 @@ class TrainVacancyApp extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
+              borderSide: const BorderSide(
+                color: Color(0xFF1E40AF),
+                width: 2,
+              ),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
           ),
+
+          /// Buttons (Search Vacant Seats)
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32,
+                vertical: 16,
+              ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -52,6 +71,8 @@ class TrainVacancyApp extends StatelessWidget {
             ),
           ),
         ),
+
+        /// Entry Page (Intro + Search)
         home: const EntryPage(),
       ),
     );

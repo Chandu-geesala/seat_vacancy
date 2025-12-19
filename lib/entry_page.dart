@@ -27,12 +27,7 @@ class _EntryPageState extends State<EntryPage> {
   // ✅ NEW: Station code to name mapping
   Map<String, String> _stationNames = {};
 
-  @override
-  void initState() {
-    super.initState();
-    _loadTrains();
-    _loadStations(); // ✅ NEW
-  }
+
 
   Future<void> _loadTrains() async {
     try {
@@ -42,7 +37,7 @@ class _EntryPageState extends State<EntryPage> {
         _trains = data.map((json) => TrainModel.fromJson(json)).toList();
       });
     } catch (e) {
-      print('Error loading trains: $e');
+      print('Error loading trains');
     }
   }
 
@@ -67,7 +62,7 @@ class _EntryPageState extends State<EntryPage> {
 
       print('✅ Loaded ${_stationNames.length} station names');
     } catch (e) {
-      print('Error loading stations: $e');
+      print('Error loading stations');
     }
   }
 
@@ -80,11 +75,6 @@ class _EntryPageState extends State<EntryPage> {
     return code; // Fallback to code only
   }
 
-  @override
-  void dispose() {
-    _trainNumberController.dispose();
-    super.dispose();
-  }
 
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
@@ -198,22 +188,34 @@ class _EntryPageState extends State<EntryPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ✅ CHANGED: Replace Icon with logo image
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Icon(
-                    Icons.train_rounded,
-                    size: 48,
-                    color: Colors.white,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      'logo.png',
+                      width: 164,  // ✅ Responsive size for desktop
+                      height: 164,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Fallback to icon if image fails to load
+                        return const Icon(
+                          Icons.train_rounded,
+                          size: 48,
+                          color: Colors.white,
+                        );
+                      },
+                    ),
                   ),
                 ),
                 const SizedBox(height: 32),
-                // ✅ CHANGED: New app name
                 const Text(
-                  'KaliRailSeat',
+                  'Kali RailSeat',
                   style: TextStyle(
                     fontSize: 48,
                     fontWeight: FontWeight.bold,
@@ -222,7 +224,6 @@ class _EntryPageState extends State<EntryPage> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                // ✅ CHANGED: New subtitle
                 Text(
                   'Check which train seats are actually vacant between your boarding and destination stations, even after the chart is prepared.',
                   style: TextStyle(
@@ -231,7 +232,6 @@ class _EntryPageState extends State<EntryPage> {
                     height: 1.6,
                   ),
                 ),
-
               ],
             ),
           ),
@@ -283,6 +283,7 @@ class _EntryPageState extends State<EntryPage> {
   Widget _buildMobileHeader() {
     return Column(
       children: [
+        // ✅ CHANGED: Replace Icon with logo image
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -291,30 +292,39 @@ class _EntryPageState extends State<EntryPage> {
           ),
           child: Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.train_rounded,
-              size: 48,
-              color: Color(0xFF6366F1),
+            // decoration: const BoxDecoration(
+            //   color: Colors.white,
+            //   shape: BoxShape.circle,
+            // ),
+            child: ClipOval(
+              child: Image.asset(
+                'logo.png',
+                width: 148,  // ✅ Responsive size for mobile
+                height: 148,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  // Fallback to icon if image fails to load
+                  return const Icon(
+                    Icons.train_rounded,
+                    size: 48,
+                    color: Color(0xFF6366F1),
+                  );
+                },
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 24),
-        // ✅ CHANGED: New app name
-        const Text(
-          'KaliRailSeat',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          textAlign: TextAlign.center,
-        ),
+        // const SizedBox(height: 24),
+        // const Text(
+        //   'Kali RailSeat',
+        //   style: TextStyle(
+        //     fontSize: 28,
+        //     fontWeight: FontWeight.bold,
+        //     color: Colors.white,
+        //   ),
+        //   textAlign: TextAlign.center,
+        // ),
         const SizedBox(height: 12),
-        // ✅ CHANGED: New subtitle
         Text(
           'Check which train seats are actually vacant between your boarding and destination stations, even after the chart is prepared.',
           style: TextStyle(
@@ -326,7 +336,7 @@ class _EntryPageState extends State<EntryPage> {
       ],
     );
   }
-
+//
 
 
   Widget _buildFormHeader() {
@@ -383,6 +393,26 @@ class _EntryPageState extends State<EntryPage> {
     );
   }
 
+// ✅ ADD THIS: Class-level FocusNode
+  late FocusNode _trainNumberFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _trainNumberFocusNode = FocusNode();
+    _selectedDate = DateTime.now();
+    // ✅ Initialize here
+    _loadTrains();
+    _loadStations();
+  }
+
+  @override
+  void dispose() {
+    _trainNumberController.dispose();
+    _trainNumberFocusNode.dispose(); // ✅ Dispose FocusNode
+    super.dispose();
+  }
+
   Widget _buildTrainNumberField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,16 +445,20 @@ class _EntryPageState extends State<EntryPage> {
           builder: (context, constraints) {
             return RawAutocomplete<TrainModel>(
               textEditingController: _trainNumberController,
-              focusNode: FocusNode(),
+              focusNode: _trainNumberFocusNode, // ✅ Use persistent FocusNode
               optionsBuilder: (TextEditingValue textEditingValue) {
-                if (textEditingValue.text.isEmpty) {
+                // ✅ FIX: Trim whitespace and check for meaningful input
+                final searchText = textEditingValue.text.trim();
+
+                if (searchText.isEmpty) {
                   return const Iterable<TrainModel>.empty();
                 }
 
+                // ✅ FIX: Case-insensitive search with better matching
                 final matches = _trains.where((train) {
-                  final searchText = textEditingValue.text.toLowerCase();
-                  return train.number.toLowerCase().contains(searchText) ||
-                      train.name.toLowerCase().contains(searchText);
+                  final lowerSearchText = searchText.toLowerCase();
+                  return train.number.toLowerCase().contains(lowerSearchText) ||
+                      train.name.toLowerCase().contains(lowerSearchText);
                 }).take(10);
 
                 return matches;
@@ -439,6 +473,9 @@ class _EntryPageState extends State<EntryPage> {
 
                 final viewModel = context.read<EntryViewModel>();
                 await viewModel.fetchTrainStations(selection.number);
+
+                // ✅ FIX: Unfocus after selection to hide keyboard and dropdown
+                _trainNumberFocusNode.unfocus();
               },
               fieldViewBuilder: (
                   BuildContext context,
@@ -446,16 +483,8 @@ class _EntryPageState extends State<EntryPage> {
                   FocusNode focusNode,
                   VoidCallback onFieldSubmitted,
                   ) {
-                textEditingController.addListener(() {
-                  if (_selectedTrain != null &&
-                      textEditingController.text != _selectedTrain!.number) {
-                    setState(() {
-                      _selectedTrain = null;
-                      _selectedBoardingStation = null;
-                    });
-                    context.read<EntryViewModel>().clearStations();
-                  }
-                });
+                // ✅ IMPORTANT: Don't use the focusNode parameter, use your own
+                // The parameter is auto-generated and causes issues
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -463,8 +492,22 @@ class _EntryPageState extends State<EntryPage> {
                   children: [
                     TextFormField(
                       controller: textEditingController,
-                      focusNode: focusNode,
+                      focusNode: _trainNumberFocusNode, // ✅ Use class-level FocusNode
                       style: const TextStyle(fontSize: 15),
+                      // ✅ ADD: Input formatters for cleaner input
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s]')),
+                      ],
+                      onChanged: (value) {
+                        // ✅ Clear selection when user types something different
+                        if (_selectedTrain != null && value != _selectedTrain!.number) {
+                          setState(() {
+                            _selectedTrain = null;
+                            _selectedBoardingStation = null;
+                          });
+                          context.read<EntryViewModel>().clearStations();
+                        }
+                      },
                       decoration: InputDecoration(
                         hintText: 'Search by train number or name',
                         hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
@@ -479,7 +522,7 @@ class _EntryPageState extends State<EntryPage> {
                               _selectedBoardingStation = null;
                             });
                             context.read<EntryViewModel>().clearStations();
-                            focusNode.requestFocus();
+                            _trainNumberFocusNode.requestFocus(); // ✅ Keep focus after clear
                           },
                         )
                             : const Icon(Icons.search, color: Colors.grey, size: 20),
@@ -662,6 +705,8 @@ class _EntryPageState extends State<EntryPage> {
       ],
     );
   }
+
+
 
   Widget _buildBoardingStationField() {
     return Consumer<EntryViewModel>(

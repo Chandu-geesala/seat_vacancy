@@ -59,7 +59,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
       print('✅ Loaded ${_stationNames.length} station names');
     } catch (e) {
-      print('Error loading stations: $e');
+      print('Error loading stations ');
     }
   }
 
@@ -644,14 +644,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                         color: Colors.white,
                       ),
                     ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Select your journey stations',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white70,
-                      ),
-                    ),
+
                   ],
                 ),
               ),
