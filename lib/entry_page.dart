@@ -37,7 +37,7 @@ class _EntryPageState extends State<EntryPage> {
         _trains = data.map((json) => TrainModel.fromJson(json)).toList();
       });
     } catch (e) {
-      print('Error loading trains');
+      //print('Error loading trains');
     }
   }
 
@@ -60,9 +60,9 @@ class _EntryPageState extends State<EntryPage> {
         _stationNames = stationMap;
       });
 
-      print('✅ Loaded ${_stationNames.length} station names');
+      //print('✅ Loaded ${_stationNames.length} station names');
     } catch (e) {
-      print('Error loading stations');
+      //print('Error loading stations');
     }
   }
 

@@ -103,7 +103,7 @@ class EntryViewModel extends ChangeNotifier {
     try {
       final url = 'https://pongal.sardarspy4.workers.dev/$trainNumber';
 
-      print('🚀 Fetching train data from: $url');
+      //print('🚀 Fetching train data from: $url');
 
       final response = await http.get(
         Uri.parse(url),
@@ -115,7 +115,7 @@ class EntryViewModel extends ChangeNotifier {
         },
       );
 
-      print('📡 Response status: ${response.statusCode}');
+      //print('📡 Response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -132,8 +132,8 @@ class EntryViewModel extends ChangeNotifier {
                 : [],
           );
 
-          print('✅ Stations loaded: ${_stationsList.length} stations');
-          print('📍 Stations: ${_stationsList.join(", ")}');
+          //print('✅ Stations loaded: ${_stationsList.length} stations');
+          //print('📍 Stations: ${_stationsList.join(", ")}');
 
           _isLoadingStations = false;
           notifyListeners();
@@ -157,7 +157,7 @@ class EntryViewModel extends ChangeNotifier {
       }
     } catch (e) {
       _errorMessage = 'Error: Please Try Again';
-      print('❌ Exception');
+      //print('❌ Exception');
       _isLoadingStations = false;
       notifyListeners();
       return false;
@@ -185,9 +185,9 @@ class EntryViewModel extends ChangeNotifier {
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(journeyDate);
 
-      print('=' * 80);
-      print('🚂 FETCHING TRAIN COMPOSITION');
-      print('=' * 80);
+      //print('=' * 80);
+      //print('🚂 FETCHING TRAIN COMPOSITION');
+      //print('=' * 80);
 
       final payload = {
         'trainNo': trainNumber,
@@ -225,7 +225,7 @@ class EntryViewModel extends ChangeNotifier {
         _coachData = data['cdd'] ?? [];
         _isFetchingComposition = false;
 
-        print('✅ Train composition loaded: ${_coachData!.length} coaches');
+        //print('✅ Train composition loaded: ${_coachData!.length} coaches');
         notifyListeners();
         return true;
       } else {
@@ -263,10 +263,10 @@ class EntryViewModel extends ChangeNotifier {
     final fromStationUpper = fromStation.toUpperCase();
     final toStationUpper = toStation.toUpperCase();
 
-    print('=' * 80);
-    print('🔍 SMART VACANCY SEARCH');
-    print('FROM: $fromStationUpper → TO: $toStationUpper');
-    print('=' * 80);
+    //print('=' * 80);
+    //print('🔍 SMART VACANCY SEARCH');
+    //print('FROM: $fromStationUpper → TO: $toStationUpper');
+    //print('=' * 80);
 
     final List<VacantBerthResult> results = [];
 
@@ -299,18 +299,18 @@ class EntryViewModel extends ChangeNotifier {
         notifyListeners();
       }
 
-      print('=' * 80);
-      print('🎯 SEARCH COMPLETE!');
-      print('Total Results: ${results.length}');
-      print('Coaches with vacancy: ${results.map((r) => r.coachName).toSet().length}');
-      print('=' * 80);
+      //print('=' * 80);
+      //print('🎯 SEARCH COMPLETE!');
+      //print('Total Results: ${results.length}');
+      //print('Coaches with vacancy: ${results.map((r) => r.coachName).toSet().length}');
+      //print('=' * 80);
 
       _vacantBerths = results;
       _isSearchingVacancy = false;
       notifyListeners();
       return true;
     } catch (e) {
-      print('❌ Search Exception ');
+      //print('❌ Search Exception ');
       _errorMessage = 'Search failed ';
       _isSearchingVacancy = false;
       notifyListeners();
@@ -327,7 +327,7 @@ class EntryViewModel extends ChangeNotifier {
       List<VacantBerthResult> results,
       ) async {
     try {
-      print('🔵 Checking ${coach['coachName']} (${coach['classCode']})');
+      //print('🔵 Checking ${coach['coachName']} (${coach['classCode']})');
 
       final payload = {
         'trainNo': _trainComposition!['trainNo'],
@@ -376,7 +376,7 @@ class EntryViewModel extends ChangeNotifier {
 
       await Future.delayed(const Duration(milliseconds: 300));
     } catch (e) {
-      print('❌ Error fetching ${coach['coachName']} ');
+      //print('❌ Error fetching ${coach['coachName']} ');
     }
   }
 

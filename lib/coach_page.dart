@@ -57,9 +57,9 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
         _stationNames = stationMap;
       });
 
-      print('✅ Loaded ${_stationNames.length} station names');
+      //print('✅ Loaded ${_stationNames.length} station names');
     } catch (e) {
-      print('Error loading stations ');
+      //print('Error loading stations ');
     }
   }
 
@@ -85,7 +85,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
           _isInitialized = true;
         });
 
-        print('🎯 Initialized FROM station: $_selectedFromStation');
+        //print('🎯 Initialized FROM station: $_selectedFromStation');
       }
     }
   }
@@ -105,7 +105,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
     // Return stations after FROM station
     final toStations = allStations.sublist(fromIndex + 1);
-    print('📍 TO stations available: $toStations');
+    //print('📍 TO stations available: $toStations');
     return toStations;
   }
 
@@ -124,10 +124,10 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
     // Call vacancy search API
     _showSnackBar('Searching vacant berths...', isError: false);
-    print('=' * 60);
-    print('🔍 SEARCH INITIATED');
-    print('FROM: $_selectedFromStation → TO: $_selectedToStation');
-    print('=' * 60);
+    //print('=' * 60);
+    //print('🔍 SEARCH INITIATED');
+    //print('FROM: $_selectedFromStation → TO: $_selectedToStation');
+    //print('=' * 60);
 
     viewModel.searchVacantBerths(
       fromStation: _selectedFromStation!,
@@ -355,7 +355,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
     final coaches = viewModel.coachData!;
     final stations = viewModel.stationsList;
 
-    print('🚂 Building content with ${stations.length} stations: $stations');
+    //print('🚂 Building content with ${stations.length} stations: $stations');
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
@@ -723,7 +723,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                       _selectedFromStation = value;
                       _selectedToStation = null;
                     });
-                    print('✅ FROM station selected: $value');
+                    //print('✅ FROM station selected: $value');
                   },
                 ),
               ),
@@ -840,7 +840,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                     setState(() {
                       _selectedToStation = value;
                     });
-                    print('✅ TO station selected: $value');
+                    //print('✅ TO station selected: $value');
                   },
                 ),
               ),
