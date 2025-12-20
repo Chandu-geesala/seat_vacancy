@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'package:intl/intl.dart';
+import 'dart:collection';
 
 /// Smart Vacancy Berth Model with segment matching info
 class VacantBerthResult {
@@ -44,12 +45,41 @@ class SegmentInfo {
   });
 }
 
+/// NEW: Multi-segment journey path model
+class MultiSegmentPath {
+  final List<PathSegment> segments;
+  final int transferCount;
+  final String pathDescription;
+
+  MultiSegmentPath({
+    required this.segments,
+    required this.transferCount,
+    required this.pathDescription,
+  });
+
+  String get summary =>
+      '${segments.length} segment${segments.length > 1 ? 's' : ''} • $transferCount transfer${transferCount != 1 ? 's' : ''}';
+}
+
+class PathSegment {
+  final String fromStation;
+  final String toStation;
+  final List<VacantBerthResult> availableSeats;
+
+  PathSegment({
+    required this.fromStation,
+    required this.toStation,
+    required this.availableSeats,
+  });
+}
+
 class EntryViewModel extends ChangeNotifier {
   // Loading states
   bool _isLoadingStations = false;
   bool _isSubmitting = false;
   bool _isFetchingComposition = false;
   bool _isSearchingVacancy = false;
+  bool _isSearchingMultiSegment = false;
 
   // Data
   List<String> _stationsList = [];
@@ -58,6 +88,7 @@ class EntryViewModel extends ChangeNotifier {
   Map<String, dynamic>? _trainComposition;
   List<dynamic>? _coachData;
   List<VacantBerthResult>? _vacantBerths;
+  List<MultiSegmentPath>? _multiSegmentPaths;
 
   // Stored data for later use
   String? _boardingStation;
@@ -68,11 +99,15 @@ class EntryViewModel extends ChangeNotifier {
   int _processedCoaches = 0;
   int _totalCoaches = 0;
 
+  // NEW: Cache for optimization - stores ALL vacant segments
+  Map<String, List<VacantBerthResult>> _segmentCache = {};
+
   // Getters
   bool get isLoadingStations => _isLoadingStations;
   bool get isSubmitting => _isSubmitting;
   bool get isFetchingComposition => _isFetchingComposition;
   bool get isSearchingVacancy => _isSearchingVacancy;
+  bool get isSearchingMultiSegment => _isSearchingMultiSegment;
   List<String> get stationsList => _stationsList;
   String? get errorMessage => _errorMessage;
   TrainDetailsModel? get trainDetails => _trainDetails;
@@ -80,11 +115,23 @@ class EntryViewModel extends ChangeNotifier {
   Map<String, dynamic>? get trainComposition => _trainComposition;
   List<dynamic>? get coachData => _coachData;
   List<VacantBerthResult>? get vacantBerths => _vacantBerths;
+  List<MultiSegmentPath>? get multiSegmentPaths => _multiSegmentPaths;
   String? get boardingStation => _boardingStation;
   DateTime? get journeyDate => _journeyDate;
   String? get trainNumber => _trainNumber;
   double get searchProgress =>
       _totalCoaches > 0 ? _processedCoaches / _totalCoaches : 0.0;
+
+  // Clear previous vacancy results
+  void clearVacantBerths() {
+    _vacantBerths = null;
+    _multiSegmentPaths = null;
+    _processedCoaches = 0;
+    _totalCoaches = 0;
+    _isSearchingVacancy = false;
+    _isSearchingMultiSegment = false;
+    notifyListeners();
+  }
 
   /// Fetch train stations from API
   Future<bool> fetchTrainStations(String trainNumber) async {
@@ -103,8 +150,6 @@ class EntryViewModel extends ChangeNotifier {
     try {
       final url = 'https://pongal.sardarspy4.workers.dev/$trainNumber';
 
-      //print('🚀 Fetching train data from: $url');
-
       final response = await http.get(
         Uri.parse(url),
         headers: {'Accept': 'application/json'},
@@ -114,8 +159,6 @@ class EntryViewModel extends ChangeNotifier {
           throw TimeoutException('Request timeout');
         },
       );
-
-      //print('📡 Response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -131,9 +174,6 @@ class EntryViewModel extends ChangeNotifier {
                 ? List<String>.from(data['allscodes'])
                 : [],
           );
-
-          //print('✅ Stations loaded: ${_stationsList.length} stations');
-          //print('📍 Stations: ${_stationsList.join(", ")}');
 
           _isLoadingStations = false;
           notifyListeners();
@@ -157,7 +197,6 @@ class EntryViewModel extends ChangeNotifier {
       }
     } catch (e) {
       _errorMessage = 'Error: Please Try Again';
-      //print('❌ Exception');
       _isLoadingStations = false;
       notifyListeners();
       return false;
@@ -175,6 +214,7 @@ class EntryViewModel extends ChangeNotifier {
     _trainComposition = null;
     _coachData = null;
     _vacantBerths = null;
+    _multiSegmentPaths = null;
 
     _trainNumber = trainNumber;
     _boardingStation = boardingStation;
@@ -184,10 +224,6 @@ class EntryViewModel extends ChangeNotifier {
 
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(journeyDate);
-
-      //print('=' * 80);
-      //print('🚂 FETCHING TRAIN COMPOSITION');
-      //print('=' * 80);
 
       final payload = {
         'trainNo': trainNumber,
@@ -225,7 +261,6 @@ class EntryViewModel extends ChangeNotifier {
         _coachData = data['cdd'] ?? [];
         _isFetchingComposition = false;
 
-        //print('✅ Train composition loaded: ${_coachData!.length} coaches');
         notifyListeners();
         return true;
       } else {
@@ -255,18 +290,15 @@ class EntryViewModel extends ChangeNotifier {
 
     _isSearchingVacancy = true;
     _vacantBerths = null;
+    _multiSegmentPaths = null;
     _errorMessage = null;
     _processedCoaches = 0;
     _totalCoaches = _coachData!.length;
+    _segmentCache.clear(); // Clear cache for new search
     notifyListeners();
 
     final fromStationUpper = fromStation.toUpperCase();
     final toStationUpper = toStation.toUpperCase();
-
-    //print('=' * 80);
-    //print('🔍 SMART VACANCY SEARCH');
-    //print('FROM: $fromStationUpper → TO: $toStationUpper');
-    //print('=' * 80);
 
     final List<VacantBerthResult> results = [];
 
@@ -274,7 +306,8 @@ class EntryViewModel extends ChangeNotifier {
       final headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/plain, */*',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Origin': 'https://www.irctc.co.in',
         'Referer': 'https://www.irctc.co.in/online-charts/',
       };
@@ -299,26 +332,180 @@ class EntryViewModel extends ChangeNotifier {
         notifyListeners();
       }
 
-      //print('=' * 80);
-      //print('🎯 SEARCH COMPLETE!');
-      //print('Total Results: ${results.length}');
-      //print('Coaches with vacancy: ${results.map((r) => r.coachName).toSet().length}');
-      //print('=' * 80);
-
       _vacantBerths = results;
       _isSearchingVacancy = false;
+
+      print('✅ Direct search complete: ${results.length} berths found');
+      print('📦 Segment cache size: ${_segmentCache.length} segments');
+
+      // NEW: If no direct seats found, automatically search for multi-segment paths
+      if (results.isEmpty) {
+        print('🔄 No direct seats, searching multi-segment paths...');
+        await _searchMultiSegmentPaths(fromStationUpper, toStationUpper);
+      }
+
       notifyListeners();
       return true;
     } catch (e) {
-      //print('❌ Search Exception ');
-      _errorMessage = 'Search failed ';
+      print('❌ Search error: $e');
+      _errorMessage = 'Search failed';
       _isSearchingVacancy = false;
       notifyListeners();
       return false;
     }
   }
 
-  /// Process single coach for vacancy
+  /// NEW: 🚀 SMART MULTI-SEGMENT PATH FINDER (BFS + Memoization)
+  Future<void> _searchMultiSegmentPaths(
+      String fromStation,
+      String toStation,
+      ) async {
+    _isSearchingMultiSegment = true;
+    notifyListeners();
+
+    try {
+      print('🔍 Starting multi-segment search: $fromStation → $toStation');
+
+      // Build graph of all possible segments with available seats
+      final segmentGraph = _buildSegmentGraph();
+
+      print('📊 Graph has ${segmentGraph.length} nodes');
+
+      if (segmentGraph.isEmpty) {
+        print('❌ Graph is empty, no paths possible');
+        _multiSegmentPaths = [];
+        _isSearchingMultiSegment = false;
+        notifyListeners();
+        return;
+      }
+
+      // Use BFS to find optimal paths
+      final paths = _findOptimalPaths(segmentGraph, fromStation, toStation);
+
+      print('✅ Found ${paths.length} alternative paths');
+
+      _multiSegmentPaths = paths;
+      _isSearchingMultiSegment = false;
+      notifyListeners();
+    } catch (e) {
+      print('❌ Multi-segment error: $e');
+      _multiSegmentPaths = [];
+      _isSearchingMultiSegment = false;
+      notifyListeners();
+    }
+  }
+
+  /// Build a graph of all station-to-station segments with available seats
+  Map<String, Map<String, List<VacantBerthResult>>> _buildSegmentGraph() {
+    final graph = <String, Map<String, List<VacantBerthResult>>>{};
+
+    print('🔨 Building graph from ${_segmentCache.length} cached segments');
+
+    // Use cached berth data from the initial search
+    for (var entry in _segmentCache.entries) {
+      final key = entry.key; // Format: "FROM->TO"
+      final berths = entry.value;
+
+      if (berths.isEmpty) continue;
+
+      final parts = key.split('->');
+      if (parts.length != 2) continue;
+
+      final from = parts[0];
+      final to = parts[1];
+
+      graph.putIfAbsent(from, () => {});
+      graph[from]![to] = berths;
+
+      print('  📍 $from → $to: ${berths.length} seats');
+    }
+
+    return graph;
+  }
+
+  /// BFS to find top 3 optimal paths (minimum transfers)
+  List<MultiSegmentPath> _findOptimalPaths(
+      Map<String, Map<String, List<VacantBerthResult>>> graph,
+      String start,
+      String end,
+      ) {
+    print('🚀 BFS from $start to $end');
+
+    final paths = <MultiSegmentPath>[];
+    final queue = Queue<_PathState>();
+
+    // Initialize BFS
+    queue.add(_PathState(
+      currentStation: start,
+      segments: [],
+      visitedStations: {start},
+    ));
+
+    int iterations = 0;
+    const maxIterations = 1000;
+
+    while (queue.isNotEmpty && paths.length < 3 && iterations < maxIterations) {
+      iterations++;
+      final state = queue.removeFirst();
+
+      // Reached destination
+      if (state.currentStation == end && state.segments.isNotEmpty) {
+        final path = MultiSegmentPath(
+          segments: state.segments,
+          transferCount: state.segments.length - 1,
+          pathDescription: _buildPathDescription(state.segments),
+        );
+        paths.add(path);
+        print('  ✅ Path ${paths.length}: ${path.pathDescription}');
+        continue;
+      }
+
+      // Explore next segments
+      final nextStations = graph[state.currentStation] ?? {};
+
+      for (final entry in nextStations.entries) {
+        final nextStation = entry.key;
+        final availableSeats = entry.value;
+
+        // Skip if already visited in this path or no seats
+        if (state.visitedStations.contains(nextStation) ||
+            availableSeats.isEmpty) {
+          continue;
+        }
+
+        // Skip if station is PAST destination (backtracking)
+        final destIndex = _stationsList.indexOf(end);
+        final nextIndex = _stationsList.indexOf(nextStation);
+        if (destIndex != -1 && nextIndex > destIndex) {
+          continue;
+        }
+
+        // Create new path state
+        final newSegment = PathSegment(
+          fromStation: state.currentStation,
+          toStation: nextStation,
+          availableSeats: availableSeats,
+        );
+
+        queue.add(_PathState(
+          currentStation: nextStation,
+          segments: [...state.segments, newSegment],
+          visitedStations: {...state.visitedStations, nextStation},
+        ));
+      }
+    }
+
+    // Sort by transfer count (fewer is better)
+    paths.sort((a, b) => a.transferCount.compareTo(b.transferCount));
+
+    return paths.take(3).toList();
+  }
+
+  String _buildPathDescription(List<PathSegment> segments) {
+    return segments.map((s) => '${s.fromStation} → ${s.toStation}').join(' ➜ ');
+  }
+
+  /// ✅ FIXED: Process single coach for vacancy
   Future<void> _processCoach(
       dynamic coach,
       String fromStation,
@@ -327,23 +514,25 @@ class EntryViewModel extends ChangeNotifier {
       List<VacantBerthResult> results,
       ) async {
     try {
-      //print('🔵 Checking ${coach['coachName']} (${coach['classCode']})');
-
       final payload = {
         'trainNo': _trainComposition!['trainNo'],
         'boardingStation': _boardingStation ?? _trainComposition!['from'],
         'remoteStation': _trainComposition!['remote'],
         'trainSourceStation': _trainComposition!['from'],
-        'jDate': DateFormat('yyyy-MM-dd').format(_journeyDate ?? DateTime.now()),
+        'jDate':
+        DateFormat('yyyy-MM-dd').format(_journeyDate ?? DateTime.now()),
         'coach': coach['coachName'],
         'cls': coach['classCode'],
       };
 
-      final response = await http.post(
-        Uri.parse('https://www.irctc.co.in/online-charts/api/coachComposition'),
+      final response = await http
+          .post(
+        Uri.parse(
+            'https://www.irctc.co.in/online-charts/api/coachComposition'),
         headers: headers,
         body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 10));
+      )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -352,6 +541,10 @@ class EntryViewModel extends ChangeNotifier {
           List<dynamic> berths = data['bdd'] ?? [];
 
           for (var berth in berths) {
+            // ✅ NEW: Cache ALL vacant segments first (for multi-segment)
+            final allSegments = _extractAllVacantSegments(berth, coach);
+
+            // Then check if matches user query (for direct results)
             final matchResult = _analyzeBerthSegments(
               berth,
               fromStation,
@@ -376,11 +569,60 @@ class EntryViewModel extends ChangeNotifier {
 
       await Future.delayed(const Duration(milliseconds: 300));
     } catch (e) {
-      //print('❌ Error fetching ${coach['coachName']} ');
+      // Silent fail for individual coaches
     }
   }
 
-  /// SMART LOGIC: Analyze berth segments for vacancy matches
+  /// ✅ NEW: Extract and cache ALL vacant segments (regardless of user query)
+  void _extractAllVacantSegments(Map<String, dynamic> berth, dynamic coach) {
+    final List<dynamic> bsd = berth['bsd'] ?? [];
+    if (bsd.isEmpty) return;
+
+    List<SegmentInfo> vacantSegs = [];
+    List<SegmentInfo> occupiedSegs = [];
+
+    for (var segment in bsd) {
+      final segFrom = (segment['from'] ?? '').toString().toUpperCase();
+      final segTo = (segment['to'] ?? '').toString().toUpperCase();
+      final isVacant = segment['occupancy'] == false;
+      final quota = segment['quota'] ?? '';
+
+      final segInfo = SegmentInfo(
+        from: segFrom,
+        to: segTo,
+        quota: quota,
+        isVacant: isVacant,
+      );
+
+      if (isVacant) {
+        vacantSegs.add(segInfo);
+      } else {
+        occupiedSegs.add(segInfo);
+      }
+    }
+
+    // Cache ALL vacant segments
+    if (vacantSegs.isNotEmpty) {
+      final berthResult = VacantBerthResult(
+        coachName: coach['coachName'],
+        coachClass: coach['classCode'],
+        berthNo: berth['berthNo'],
+        berthCode: berth['berthCode'],
+        cabin: berth['cabinCoupeNameNo'] ?? '',
+        matchType: 'CACHE', // Dummy type for cache only
+        vacantSegments: vacantSegs,
+        occupiedSegments: occupiedSegs,
+      );
+
+      for (var seg in vacantSegs) {
+        final key = '${seg.from}->${seg.to}';
+        _segmentCache.putIfAbsent(key, () => []);
+        _segmentCache[key]!.add(berthResult);
+      }
+    }
+  }
+
+  /// SMART LOGIC: Analyze berth segments for vacancy matches (for direct results)
   Map<String, dynamic>? _analyzeBerthSegments(
       Map<String, dynamic> berth,
       String fromStation,
@@ -423,11 +665,11 @@ class EntryViewModel extends ChangeNotifier {
     // Determine match type
     String matchType = 'EXACT';
     if (vacantSegs.length == 1 && occupiedSegs.isEmpty) {
-      matchType = 'EXACT'; // Fully vacant
+      matchType = 'EXACT';
     } else if (vacantSegs.isNotEmpty && occupiedSegs.isNotEmpty) {
-      matchType = 'PARTIAL'; // Some segments occupied
+      matchType = 'PARTIAL';
     } else if (vacantSegs.length > 1) {
-      matchType = 'EXTENDED'; // Vacant beyond user's journey
+      matchType = 'EXTENDED';
     }
 
     return {
@@ -449,8 +691,10 @@ class EntryViewModel extends ChangeNotifier {
     final segFromIndex = _stationsList.indexOf(segFrom);
     final segToIndex = _stationsList.indexOf(segTo);
 
-    if (fromIndex == -1 || toIndex == -1 ||
-        segFromIndex == -1 || segToIndex == -1) {
+    if (fromIndex == -1 ||
+        toIndex == -1 ||
+        segFromIndex == -1 ||
+        segToIndex == -1) {
       return false;
     }
 
@@ -497,6 +741,7 @@ class EntryViewModel extends ChangeNotifier {
     _trainComposition = null;
     _coachData = null;
     _vacantBerths = null;
+    _multiSegmentPaths = null;
     notifyListeners();
   }
 
@@ -514,17 +759,20 @@ class EntryViewModel extends ChangeNotifier {
     _isSubmitting = false;
     _isFetchingComposition = false;
     _isSearchingVacancy = false;
+    _isSearchingMultiSegment = false;
     _stationsList = [];
     _errorMessage = null;
     _trainDetails = null;
     _trainComposition = null;
     _coachData = null;
     _vacantBerths = null;
+    _multiSegmentPaths = null;
     _boardingStation = null;
     _journeyDate = null;
     _trainNumber = null;
     _processedCoaches = 0;
     _totalCoaches = 0;
+    _segmentCache.clear();
     notifyListeners();
   }
 
@@ -532,6 +780,19 @@ class EntryViewModel extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
   }
+}
+
+/// Helper class for BFS pathfinding
+class _PathState {
+  final String currentStation;
+  final List<PathSegment> segments;
+  final Set<String> visitedStations;
+
+  _PathState({
+    required this.currentStation,
+    required this.segments,
+    required this.visitedStations,
+  });
 }
 
 /// Train Details Model
@@ -566,6 +827,7 @@ class TrainModel {
   @override
   String toString() => '$number - $name';
 
+  @override
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;

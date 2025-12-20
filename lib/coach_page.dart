@@ -19,8 +19,12 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
   String? _selectedToStation;
   bool _isInitialized = false;
 
+  Map<int, bool> _expandedSegments = {};
+
   // ✅ NEW: Station code to name mapping
   Map<String, String> _stationNames = {};
+
+  Map<String, bool> _expandedCoaches = {};
 
   @override
   void initState() {
@@ -97,17 +101,25 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
   }
 
   // Get stations for TO dropdown (only stations AFTER FROM station)
-  List<String> _getToStations(List<String> allStations) {
-    if (_selectedFromStation == null) return [];
+  List<String> getToStations(List<String> allStations) {
+    // ✅ Return empty list if no FROM station selected
+    if (_selectedFromStation == null || allStations.isEmpty) {
+      return [];
+    }
 
     final fromIndex = allStations.indexOf(_selectedFromStation!);
-    if (fromIndex == -1 || fromIndex >= allStations.length - 1) return [];
+
+    // ✅ Return empty if FROM station not found or is last station
+    if (fromIndex == -1 || fromIndex >= allStations.length - 1) {
+      return [];
+    }
 
     // Return stations after FROM station
     final toStations = allStations.sublist(fromIndex + 1);
-    //print('📍 TO stations available: $toStations');
+    print('TO stations available: $toStations');
     return toStations;
   }
+
 
   void _handleSearch() {
     if (_selectedFromStation == null) {
@@ -355,12 +367,10 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
     final coaches = viewModel.coachData!;
     final stations = viewModel.stationsList;
 
-    //print('🚂 Building content with ${stations.length} stations: $stations');
-
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
-        // App Bar with Train Info
+        // App Bar with Train Info (keep as is)
         SliverAppBar(
           expandedHeight: 140,
           pinned: true,
@@ -416,7 +426,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              '${_getStationDisplay(composition['from'])} → ${_getStationDisplay(composition['to'])}', // ✅ Display names
+                              '${_getStationDisplay(composition['from'])} → ${_getStationDisplay(composition['to'])}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Colors.white70,
@@ -443,7 +453,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
               children: [
                 const SizedBox(height: 20),
 
-                // Train composition diagram
+                // Train composition diagram (keep as is)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
@@ -471,7 +481,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
                 const SizedBox(height: 12),
 
-                // Horizontal coach diagram
+                // Horizontal coach diagram (keep as is)
                 SizedBox(
                   height: 85,
                   child: ListView.builder(
@@ -499,7 +509,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                 const SizedBox(height: 20),
 
                 // Search Progress Indicator
-                if (viewModel.isSearchingVacancy)
+                if (viewModel.isSearchingVacancy || viewModel.isSearchingMultiSegment)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _buildSearchProgress(viewModel),
@@ -507,11 +517,18 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
                 const SizedBox(height: 20),
 
-                // Results Section
-                if (viewModel.vacantBerths != null)
+                // ✅ NEW: Direct Results Section
+                if (viewModel.vacantBerths != null && viewModel.vacantBerths!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _buildResultsSection(viewModel),
+                  ),
+
+                // ✅ NEW: Multi-Segment Alternative Paths
+                if (viewModel.multiSegmentPaths != null && viewModel.multiSegmentPaths!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildMultiSegmentSection(viewModel),
                   ),
 
                 const SizedBox(height: 80),
@@ -522,6 +539,457 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
       ],
     );
   }
+
+
+  /// ✅ NEW: Build multi-segment alternative paths UI
+  Widget _buildMultiSegmentSection(EntryViewModel viewModel) {
+    final paths = viewModel.multiSegmentPaths!;
+    final from = _selectedFromStation;
+    final to = _selectedToStation;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header with info banner
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF3C7),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFF59E0B), width: 2),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.info_outline,
+                color: Color(0xFFD97706),
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'No Direct Seats Available',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF92400E),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'But you can travel by changing seats at intermediate stations!',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Title
+        if (from != null && to != null)
+          Text(
+            'Alternative Paths: ${_getStationDisplay(from)} → ${_getStationDisplay(to)}',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+
+        const SizedBox(height: 12),
+
+        // Path cards
+        ...paths.asMap().entries.map((entry) {
+          final index = entry.key;
+          final path = entry.value;
+          return _buildPathCard(path, index + 1);
+        }).toList(),
+      ],
+    );
+  }
+
+
+  /// Build individual path card
+  Widget _buildPathCard(MultiSegmentPath path, int pathNumber) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withOpacity(0.3),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Path header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFBBF24), Color(0xFFF59E0B)],
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(14),
+                topRight: Radius.circular(14),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '#$pathNumber',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFF59E0B),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        path.summary,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        path.pathDescription,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Segments
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: path.segments.asMap().entries.map((entry) {
+                final segIndex = entry.key;
+                final segment = entry.value;
+                final isLast = segIndex == path.segments.length - 1;
+
+                return Column(
+                  children: [
+                    _buildSegmentRow(segment, segIndex + 1),
+                    if (!isLast) _buildTransferIndicator(),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  /// Build segment row showing from-to with available seats
+  /// Build segment row showing from-to with available seats
+  Widget _buildSegmentRow(PathSegment segment, int segmentNumber) {
+    // Track expansion state for each segment
+    final isExpanded = _expandedSegments[segmentNumber] ?? false;
+    final displaySeats = isExpanded
+        ? segment.availableSeats
+        : segment.availableSeats.take(10).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Segment route
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '$segmentNumber',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${_getStationDisplay(segment.fromStation)} → ${_getStationDisplay(segment.toStation)}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${segment.availableSeats.length} seats',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF10B981),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Available seats chips
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: displaySeats.map((berth) {
+              return InkWell(
+                onTap: () => _showBerthDetailsDialog(berth),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${berth.coachName}-${berth.berthNo}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+
+          // Load More button
+          if (segment.availableSeats.length > 10) ...[
+            const SizedBox(height: 12),
+            Center(
+              child: TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _expandedSegments[segmentNumber] = !isExpanded;
+                  });
+                },
+                icon: Icon(
+                  isExpanded ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: const Color(0xFF10B981),
+                ),
+                label: Text(
+                  isExpanded
+                      ? 'Show Less'
+                      : 'Load ${segment.availableSeats.length - 10} More Seats',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF10B981),
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981).withOpacity(0.1),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+
+  /// Build transfer indicator between segments
+  Widget _buildTransferIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          const SizedBox(width: 12),
+          Container(
+            width: 2,
+            height: 20,
+            color: const Color(0xFFF59E0B),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF3C7),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFF59E0B)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.swap_horiz,
+                  size: 14,
+                  color: Color(0xFFD97706),
+                ),
+                const SizedBox(width: 4),
+                const Text(
+                  'Change seat here',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFD97706),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildSearchProgress(EntryViewModel viewModel) {
+    final isMultiSegment = viewModel.isSearchingMultiSegment;
+    final message = isMultiSegment
+        ? 'Finding alternative paths...'
+        : 'Searching coaches...';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    if (!isMultiSegment) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Processing ${(viewModel.searchProgress * 100).toInt()}%',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (!isMultiSegment) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: viewModel.searchProgress,
+                backgroundColor: Colors.grey[200],
+                color: const Color(0xFF10B981),
+                minHeight: 6,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+
 
   Widget _buildEngineCard() {
     return Container(
@@ -607,7 +1075,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
   }
 
   Widget _buildSearchSection(List<String> stations, EntryViewModel viewModel) {
-    final toStations = _getToStations(stations);
+    final toStations = getToStations(stations);
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -628,11 +1096,9 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          Row(
+          const Row(
             children: [
-
-
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -644,7 +1110,6 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                         color: Colors.white,
                       ),
                     ),
-
                   ],
                 ),
               ),
@@ -704,7 +1169,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                   icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF10B981)),
                   isExpanded: true,
                   dropdownColor: Colors.white,
-                  items: stations.map((String station) {
+                  items: stations.map<DropdownMenuItem<String>>((String station) {
                     return DropdownMenuItem<String>(
                       value: station, // ✅ Backend uses CODE
                       child: Text(
@@ -723,6 +1188,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                       _selectedFromStation = value;
                       _selectedToStation = null;
                     });
+                    viewModel.clearVacantBerths();
                     //print('✅ FROM station selected: $value');
                   },
                 ),
@@ -774,11 +1240,11 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                   value: _selectedToStation,
                   decoration: InputDecoration(
                     prefixIcon: Icon(
-                        Icons.flag,
-                        color: _selectedFromStation == null
-                            ? Colors.grey[400]
-                            : const Color(0xFF10B981),
-                        size: 20
+                      Icons.flag,
+                      color: _selectedFromStation == null
+                          ? Colors.grey[400]
+                          : const Color(0xFF10B981),
+                      size: 20,
                     ),
                     filled: true,
                     fillColor: _selectedFromStation == null
@@ -811,16 +1277,16 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                     }).toList();
                   },
                   icon: Icon(
-                      Icons.arrow_drop_down,
-                      color: _selectedFromStation == null
-                          ? Colors.grey[400]
-                          : const Color(0xFF10B981)
+                    Icons.arrow_drop_down,
+                    color: _selectedFromStation == null
+                        ? Colors.grey[400]
+                        : const Color(0xFF10B981),
                   ),
                   isExpanded: true,
                   dropdownColor: Colors.white,
                   items: toStations.isEmpty
                       ? null
-                      : toStations.map((String station) {
+                      : toStations.map<DropdownMenuItem<String>>((String station) {
                     return DropdownMenuItem<String>(
                       value: station, // ✅ Backend uses CODE
                       child: Text(
@@ -840,6 +1306,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                     setState(() {
                       _selectedToStation = value;
                     });
+                    viewModel.clearVacantBerths();
                     //print('✅ TO station selected: $value');
                   },
                 ),
@@ -897,75 +1364,42 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildSearchProgress(EntryViewModel viewModel) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+
+
+
+  Widget _buildResultsSection(EntryViewModel viewModel) {
+    final results = viewModel.vacantBerths!;
+
+    // Safely cache current selections
+    final from = _selectedFromStation;
+    final to = _selectedToStation;
+
+    // If either selection is null now, just show a generic message
+    if (from == null || to == null) {
+      if (results.isEmpty) {
+        return Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
+          child: Column(
             children: [
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFF10B981),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Searching coaches...',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1F2937),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Processing ${(viewModel.searchProgress * 100).toInt()}%',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
+              Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'No vacant berths found',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: viewModel.searchProgress,
-              backgroundColor: Colors.grey[200],
-              color: const Color(0xFF10B981),
-              minHeight: 6,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResultsSection(EntryViewModel viewModel) {
-    final results = viewModel.vacantBerths!;
+        );
+      }
+    }
 
     if (results.isEmpty) {
       return Container(
@@ -987,14 +1421,15 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              'from ${_getStationDisplay(_selectedFromStation!)} to ${_getStationDisplay(_selectedToStation!)}', // ✅ Display names
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+            if (from != null && to != null)
+              Text(
+                'from ${_getStationDisplay(from)} to ${_getStationDisplay(to)}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
           ],
         ),
       );
@@ -1002,11 +1437,9 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
     // Group by coach
     final Map<String, List<VacantBerthResult>> groupedResults = {};
+
     for (var result in results) {
-      if (!groupedResults.containsKey(result.coachName)) {
-        groupedResults[result.coachName] = [];
-      }
-      groupedResults[result.coachName]!.add(result);
+      groupedResults.putIfAbsent(result.coachName, () => []).add(result);
     }
 
     return Column(
@@ -1033,14 +1466,15 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
         const SizedBox(height: 20),
 
-        Text(
-          'Available Berths: ${_getStationDisplay(_selectedFromStation!)} → ${_getStationDisplay(_selectedToStation!)}', // ✅ Display names
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1F2937),
+        if (from != null && to != null)
+          Text(
+            'Available Berths: ${_getStationDisplay(from)} → ${_getStationDisplay(to)}',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F2937),
+            ),
           ),
-        ),
 
         const SizedBox(height: 12),
 
@@ -1051,6 +1485,9 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
       ],
     );
   }
+
+
+
 
   Widget _buildSummaryItem(String label, String value, IconData icon) {
     return Column(
@@ -1078,13 +1515,19 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
   Widget _buildCoachResultCard(String coachName, List<VacantBerthResult> berths) {
     final firstBerth = berths.first;
+    final coachKey = coachName; // Unique key for this coach
+    final isExpanded = _expandedCoaches[coachKey] ?? false;
+    final displayBerths = isExpanded ? berths : berths.take(10).toList();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3), width: 2),
+        border: Border.all(
+          color: const Color(0xFF10B981).withOpacity(0.3),
+          width: 2,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -1146,16 +1589,59 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
           // Berth List
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: berths.map((berth) => _buildBerthChip(berth)).toList(),
+            child: Column(
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: displayBerths.map((berth) {
+                    return _buildBerthChip(berth);
+                  }).toList(),
+                ),
+
+                // Load More button for coach
+                if (berths.length > 10) ...[
+                  const SizedBox(height: 12),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _expandedCoaches[coachKey] = !isExpanded;
+                        });
+                      },
+                      icon: Icon(
+                        isExpanded ? Icons.expand_less : Icons.expand_more,
+                        size: 16,
+                        color: const Color(0xFF10B981),
+                      ),
+                      label: Text(
+                        isExpanded
+                            ? 'Show Less'
+                            : 'Load ${berths.length - 10} More Seats',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF10B981),
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981).withOpacity(0.1),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
       ),
     );
   }
+
 
   Widget _buildBerthChip(VacantBerthResult berth) {
     final color = berth.isFullyVacant ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
@@ -1212,6 +1698,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // header (same as before) ...
               Row(
                 children: [
                   Container(
@@ -1253,76 +1740,19 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
               const SizedBox(height: 20),
               const Divider(),
               const SizedBox(height: 12),
+
+              // NEW: unified, ordered segments list
               const Text(
-                'Vacancy Segments:',
+                'Journey Segments:',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 12),
-              ...berth.vacantSegments.map((segment) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF10B981),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          '${_getStationDisplay(segment.from)} → ${_getStationDisplay(segment.to)} (VACANT)', // ✅ Display names
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-              if (berth.occupiedSegments.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'Occupied Segments:',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...berth.occupiedSegments.map((segment) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFEF4444),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '${_getStationDisplay(segment.from)} → ${_getStationDisplay(segment.to)} (OCCUPIED)', // ✅ Display names
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ],
+
+              ..._buildOrderedSegments(berth),
+
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
@@ -1342,4 +1772,64 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
       ),
     );
   }
+
+
+
+  List<Widget> _buildOrderedSegments(VacantBerthResult berth) {
+    // combine vacant + occupied with a flag
+    final all = <Map<String, dynamic>>[
+      ...berth.vacantSegments.map((s) => {'seg': s, 'vacant': true}),
+      ...berth.occupiedSegments.map((s) => {'seg': s, 'vacant': false}),
+    ];
+
+    // sort by from-station index, then to-station index
+    all.sort((a, b) {
+      final sa = a['seg'] as SegmentInfo;
+      final sb = b['seg'] as SegmentInfo;
+
+      final fromA = _stationNames.keys.toList().indexOf(sa.from);
+      final fromB = _stationNames.keys.toList().indexOf(sb.from);
+      if (fromA != fromB) return fromA.compareTo(fromB);
+
+      final toA = _stationNames.keys.toList().indexOf(sa.to);
+      final toB = _stationNames.keys.toList().indexOf(sb.to);
+      return toA.compareTo(toB);
+    });
+
+    return all.map((entry) {
+      final segment = entry['seg'] as SegmentInfo;
+      final isVacant = entry['vacant'] as bool;
+      final color = isVacant ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+      final label = isVacant ? 'VACANT' : 'OCCUPIED';
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '${_getStationDisplay(segment.from)} → ${_getStationDisplay(segment.to)} ($label)',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }).toList();
+  }
+
+
+
 }

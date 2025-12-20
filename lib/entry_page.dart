@@ -197,13 +197,12 @@ class _EntryPageState extends State<EntryPage> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.asset(
-                      'logo.png',
-                      width: 164,  // ✅ Responsive size for desktop
+                    child: Image.network(
+                      'https://i.ibb.co/93Np01wb/playstore.png',
+                      width: 164,
                       height: 164,
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) {
-                        // Fallback to icon if image fails to load
                         return const Icon(
                           Icons.train_rounded,
                           size: 48,
@@ -212,6 +211,7 @@ class _EntryPageState extends State<EntryPage> {
                       },
                     ),
                   ),
+
                 ),
                 const SizedBox(height: 32),
                 const Text(
@@ -297,13 +297,12 @@ class _EntryPageState extends State<EntryPage> {
             //   shape: BoxShape.circle,
             // ),
             child: ClipOval(
-              child: Image.asset(
-                'logo.png',
-                width: 148,  // ✅ Responsive size for mobile
+              child: Image.network(
+                'https://i.ibb.co/93Np01wb/playstore.png',
+                width: 148,
                 height: 148,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
-                  // Fallback to icon if image fails to load
                   return const Icon(
                     Icons.train_rounded,
                     size: 48,
@@ -312,6 +311,7 @@ class _EntryPageState extends State<EntryPage> {
                 },
               ),
             ),
+
           ),
         ),
         // const SizedBox(height: 24),
