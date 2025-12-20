@@ -24,6 +24,13 @@ class _EntryPageState extends State<EntryPage> {
   TrainModel? _selectedTrain;
   String? _selectedBoardingStation;
 
+  // ✅ ADD these at the top of _EntryPageState class
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
+  bool _showDropdown = false;
+
+
+
   // ✅ NEW: Station code to name mapping
   Map<String, String> _stationNames = {};
 
@@ -409,9 +416,11 @@ class _EntryPageState extends State<EntryPage> {
   @override
   void dispose() {
     _trainNumberController.dispose();
-    _trainNumberFocusNode.dispose(); // ✅ Dispose FocusNode
+    _trainNumberFocusNode.dispose();
+    _removeOverlay(); // ✅ ADD this line
     super.dispose();
   }
+
 
   Widget _buildTrainNumberField() {
     return Column(
@@ -443,262 +452,136 @@ class _EntryPageState extends State<EntryPage> {
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, constraints) {
-            return RawAutocomplete<TrainModel>(
-              textEditingController: _trainNumberController,
-              focusNode: _trainNumberFocusNode, // ✅ Use persistent FocusNode
-              optionsBuilder: (TextEditingValue textEditingValue) {
-                // ✅ FIX: Trim whitespace and check for meaningful input
-                final searchText = textEditingValue.text.trim();
+            return CompositedTransformTarget(
+              link: _layerLink,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: _trainNumberController,
+                    focusNode: _trainNumberFocusNode,
+                    style: const TextStyle(fontSize: 15),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s]')),
+                    ],
+                    onTap: () {
+                      // ✅ Show dropdown when field is tapped
+                      if (_trainNumberController.text.trim().isNotEmpty) {
+                        _showOverlay(context, constraints);
+                      }
+                    },
+                    onChanged: (value) {
+                      // Clear selection if user modifies text
+                      if (_selectedTrain != null && value != _selectedTrain!.number) {
+                        setState(() {
+                          _selectedTrain = null;
+                          _selectedBoardingStation = null;
+                        });
+                        context.read<EntryViewModel>().clearStations();
+                      }
 
-                if (searchText.isEmpty) {
-                  return const Iterable<TrainModel>.empty();
-                }
-
-                // ✅ FIX: Case-insensitive search with better matching
-                final matches = _trains.where((train) {
-                  final lowerSearchText = searchText.toLowerCase();
-                  return train.number.toLowerCase().contains(lowerSearchText) ||
-                      train.name.toLowerCase().contains(lowerSearchText);
-                }).take(10);
-
-                return matches;
-              },
-              displayStringForOption: (TrainModel option) => option.number,
-              onSelected: (TrainModel selection) async {
-                setState(() {
-                  _selectedTrain = selection;
-                  _trainNumberController.text = selection.number;
-                  _selectedBoardingStation = null;
-                });
-
-                final viewModel = context.read<EntryViewModel>();
-                await viewModel.fetchTrainStations(selection.number);
-
-                // ✅ FIX: Unfocus after selection to hide keyboard and dropdown
-                _trainNumberFocusNode.unfocus();
-              },
-              fieldViewBuilder: (
-                  BuildContext context,
-                  TextEditingController textEditingController,
-                  FocusNode focusNode,
-                  VoidCallback onFieldSubmitted,
-                  ) {
-                // ✅ IMPORTANT: Don't use the focusNode parameter, use your own
-                // The parameter is auto-generated and causes issues
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: textEditingController,
-                      focusNode: _trainNumberFocusNode, // ✅ Use class-level FocusNode
-                      style: const TextStyle(fontSize: 15),
-                      // ✅ ADD: Input formatters for cleaner input
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s]')),
-                      ],
-                      onChanged: (value) {
-                        // ✅ Clear selection when user types something different
-                        if (_selectedTrain != null && value != _selectedTrain!.number) {
+                      // ✅ Show/update dropdown on every change
+                      if (value.trim().isNotEmpty) {
+                        _showOverlay(context, constraints);
+                      } else {
+                        _removeOverlay();
+                      }
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search by train number or name',
+                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                      prefixIcon: const Icon(Icons.train_outlined, color: Color(0xFF6366F1), size: 20),
+                      suffixIcon: _trainNumberController.text.isNotEmpty
+                          ? IconButton(
+                        icon: Icon(Icons.clear, color: Colors.grey[400], size: 20),
+                        onPressed: () {
+                          _trainNumberController.clear();
                           setState(() {
                             _selectedTrain = null;
                             _selectedBoardingStation = null;
                           });
                           context.read<EntryViewModel>().clearStations();
-                        }
-                      },
-                      decoration: InputDecoration(
-                        hintText: 'Search by train number or name',
-                        hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                        prefixIcon: const Icon(Icons.train_outlined, color: Color(0xFF6366F1), size: 20),
-                        suffixIcon: textEditingController.text.isNotEmpty
-                            ? IconButton(
-                          icon: Icon(Icons.clear, color: Colors.grey[400], size: 20),
-                          onPressed: () {
-                            textEditingController.clear();
-                            setState(() {
-                              _selectedTrain = null;
-                              _selectedBoardingStation = null;
-                            });
-                            context.read<EntryViewModel>().clearStations();
-                            _trainNumberFocusNode.requestFocus(); // ✅ Keep focus after clear
-                          },
-                        )
-                            : const Icon(Icons.search, color: Colors.grey, size: 20),
-                        filled: true,
-                        fillColor: const Color(0xFFF9FAFB),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: _selectedTrain != null
-                                ? const Color(0xFF10B981)
-                                : Colors.grey[200]!,
-                            width: _selectedTrain != null ? 2 : 1,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
-                        ),
-                        errorBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFEF4444)),
-                        ),
-                        focusedErrorBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 2),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please select a train';
-                        }
-                        if (_selectedTrain == null) {
-                          return 'Please select a train from the dropdown';
-                        }
-                        return null;
-                      },
-                    ),
-                    if (_selectedTrain != null) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: const Color(0xFF10B981).withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.check_circle_rounded,
-                              size: 16,
-                              color: Color(0xFF10B981),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _selectedTrain!.name,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF10B981),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                );
-              },
-              optionsViewBuilder: (
-                  BuildContext context,
-                  AutocompleteOnSelected<TrainModel> onSelected,
-                  Iterable<TrainModel> options,
-                  ) {
-                if (options.isEmpty) {
-                  return Align(
-                    alignment: Alignment.topLeft,
-                    child: Material(
-                      elevation: 8,
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        width: constraints.maxWidth,
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.grey[400], size: 20),
-                            const SizedBox(width: 12),
-                            Text(
-                              'No trains found',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                return Align(
-                  alignment: Alignment.topLeft,
-                  child: Material(
-                    elevation: 8,
-                    borderRadius: BorderRadius.circular(10),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: 250,
-                        maxWidth: constraints.maxWidth,
-                      ),
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        shrinkWrap: true,
-                        itemCount: options.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          final TrainModel option = options.elementAt(index);
-                          return InkWell(
-                            onTap: () {
-                              onSelected(option);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: _selectedTrain?.number == option.number
-                                    ? const Color(0xFF6366F1).withOpacity(0.1)
-                                    : Colors.transparent,
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF6366F1).withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      option.number,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF6366F1),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      option.name,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        color: Color(0xFF374151),
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
+                          _removeOverlay();
+                          _trainNumberFocusNode.requestFocus();
                         },
+                      )
+                          : const Icon(Icons.search, color: Colors.grey, size: 20),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: _selectedTrain != null
+                              ? const Color(0xFF10B981)
+                              : Colors.grey[200]!,
+                          width: _selectedTrain != null ? 2 : 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFEF4444)),
+                      ),
+                      focusedErrorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 2),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please select a train';
+                      }
+                      if (_selectedTrain == null) {
+                        return 'Please select a train from the dropdown';
+                      }
+                      return null;
+                    },
+                  ),
+                  if (_selectedTrain != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF10B981).withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            size: 16,
+                            color: Color(0xFF10B981),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _selectedTrain!.name,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF10B981),
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                );
-              },
+                  ],
+                ],
+              ),
             );
           },
         ),
@@ -706,6 +589,136 @@ class _EntryPageState extends State<EntryPage> {
     );
   }
 
+// ✅ ADD this method to remove overlay
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    _showDropdown = false;
+  }
+
+// ✅ ADD this method to show overlay
+  void _showOverlay(BuildContext context, BoxConstraints constraints) {
+    _removeOverlay();
+
+    final searchText = _trainNumberController.text.trim();
+    if (searchText.isEmpty) return;
+
+    final lowerSearchText = searchText.toLowerCase();
+    final matches = _trains.where((train) {
+      return train.number.toLowerCase().contains(lowerSearchText) ||
+          train.name.toLowerCase().contains(lowerSearchText);
+    }).take(10).toList();
+
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: size.width,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: Offset(0, size.height + 4),
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(10),
+            child: matches.isEmpty
+                ? Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.3)),
+                color: const Color(0xFFEF4444).withOpacity(0.05),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red[400], size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No matching trains found',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.red[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+                : ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 250),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shrinkWrap: true,
+                itemCount: matches.length,
+                itemBuilder: (context, index) {
+                  final train = matches[index];
+                  return InkWell(
+                    onTap: () async {
+                      setState(() {
+                        _selectedTrain = train;
+                        _trainNumberController.text = train.number;
+                        _selectedBoardingStation = null;
+                      });
+
+                      final viewModel = context.read<EntryViewModel>();
+                      await viewModel.fetchTrainStations(train.number);
+
+                      _removeOverlay();
+                      _trainNumberFocusNode.unfocus();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _selectedTrain?.number == train.number
+                            ? const Color(0xFF6366F1).withOpacity(0.1)
+                            : Colors.transparent,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6366F1).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              train.number,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF6366F1),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              train.name,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF374151),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+    _showDropdown = true;
+  }
 
 
   Widget _buildBoardingStationField() {
