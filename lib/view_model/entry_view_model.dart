@@ -335,19 +335,19 @@ class EntryViewModel extends ChangeNotifier {
       _vacantBerths = results;
       _isSearchingVacancy = false;
 
-      print('✅ Direct search complete: ${results.length} berths found');
-      print('📦 Segment cache size: ${_segmentCache.length} segments');
+     //print('✅ Direct search complete: ${results.length} berths found');
+     //print('📦 Segment cache size: ${_segmentCache.length} segments');
 
       // NEW: If no direct seats found, automatically search for multi-segment paths
       if (results.isEmpty) {
-        print('🔄 No direct seats, searching multi-segment paths...');
+       //print('🔄 No direct seats, searching multi-segment paths...');
         await _searchMultiSegmentPaths(fromStationUpper, toStationUpper);
       }
 
       notifyListeners();
       return true;
     } catch (e) {
-      print('❌ Search error: $e');
+     //print('❌ Search error: $e');
       _errorMessage = 'Search failed';
       _isSearchingVacancy = false;
       notifyListeners();
@@ -364,15 +364,15 @@ class EntryViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      print('🔍 Starting multi-segment search: $fromStation → $toStation');
+     //print('🔍 Starting multi-segment search: $fromStation → $toStation');
 
       // Build graph of all possible segments with available seats
       final segmentGraph = _buildSegmentGraph();
 
-      print('📊 Graph has ${segmentGraph.length} nodes');
+     //print('📊 Graph has ${segmentGraph.length} nodes');
 
       if (segmentGraph.isEmpty) {
-        print('❌ Graph is empty, no paths possible');
+       //print('❌ Graph is empty, no paths possible');
         _multiSegmentPaths = [];
         _isSearchingMultiSegment = false;
         notifyListeners();
@@ -382,13 +382,13 @@ class EntryViewModel extends ChangeNotifier {
       // Use BFS to find optimal paths
       final paths = _findOptimalPaths(segmentGraph, fromStation, toStation);
 
-      print('✅ Found ${paths.length} alternative paths');
+     //print('✅ Found ${paths.length} alternative paths');
 
       _multiSegmentPaths = paths;
       _isSearchingMultiSegment = false;
       notifyListeners();
     } catch (e) {
-      print('❌ Multi-segment error: $e');
+     //print('❌ Multi-segment error: $e');
       _multiSegmentPaths = [];
       _isSearchingMultiSegment = false;
       notifyListeners();
@@ -399,7 +399,7 @@ class EntryViewModel extends ChangeNotifier {
   Map<String, Map<String, List<VacantBerthResult>>> _buildSegmentGraph() {
     final graph = <String, Map<String, List<VacantBerthResult>>>{};
 
-    print('🔨 Building graph from ${_segmentCache.length} cached segments');
+   //print('🔨 Building graph from ${_segmentCache.length} cached segments');
 
     // Use cached berth data from the initial search
     for (var entry in _segmentCache.entries) {
@@ -417,7 +417,7 @@ class EntryViewModel extends ChangeNotifier {
       graph.putIfAbsent(from, () => {});
       graph[from]![to] = berths;
 
-      print('  📍 $from → $to: ${berths.length} seats');
+     //print('  📍 $from → $to: ${berths.length} seats');
     }
 
     return graph;
@@ -429,7 +429,7 @@ class EntryViewModel extends ChangeNotifier {
       String start,
       String end,
       ) {
-    print('🚀 BFS from $start to $end');
+   //print('🚀 BFS from $start to $end');
 
     final paths = <MultiSegmentPath>[];
     final queue = Queue<_PathState>();
@@ -456,7 +456,7 @@ class EntryViewModel extends ChangeNotifier {
           pathDescription: _buildPathDescription(state.segments),
         );
         paths.add(path);
-        print('  ✅ Path ${paths.length}: ${path.pathDescription}');
+       //print('  ✅ Path ${paths.length}: ${path.pathDescription}');
         continue;
       }
 

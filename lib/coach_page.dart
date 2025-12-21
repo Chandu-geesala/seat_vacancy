@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
@@ -41,6 +43,30 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
     _animationController.forward();
     _loadStations(); // ✅ NEW
   }
+
+  // Add this method anywhere in CoachPageState class
+  void _openTelegramSupport() async {
+    final url = Uri.parse('https://t.me/+UyTq6xPWZBtmN2Y1');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      showSnackBar('Could not open Telegram link', isError: true);
+    }
+  }
+
+  void showSnackBar(String message, {required bool isError}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
 
   // ✅ NEW: Load station names
   Future<void> _loadStations() async {
@@ -116,7 +142,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
     // Return stations after FROM station
     final toStations = allStations.sublist(fromIndex + 1);
-    print('TO stations available: $toStations');
+    //print('TO stations available: $toStations');
     return toStations;
   }
 
@@ -379,6 +405,49 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () => Navigator.pop(context),
           ),
+          // NEW: Add Telegram button
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _openTelegramSupport,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.support_agent,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Support',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
           flexibleSpace: FlexibleSpaceBar(
             background: Container(
               decoration: const BoxDecoration(
