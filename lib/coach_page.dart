@@ -518,18 +518,96 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                 const SizedBox(height: 20),
 
                 // ✅ NEW: Direct Results Section
+                // Direct Results Section
                 if (viewModel.vacantBerths != null && viewModel.vacantBerths!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _buildResultsSection(viewModel),
                   ),
 
-                // ✅ NEW: Multi-Segment Alternative Paths
+// Multi-Segment Alternative Paths
                 if (viewModel.multiSegmentPaths != null && viewModel.multiSegmentPaths!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _buildMultiSegmentSection(viewModel),
                   ),
+
+// No seats found message (when both searches complete with no results)
+                if (viewModel.vacantBerths != null &&
+                    viewModel.vacantBerths!.isEmpty &&
+                    viewModel.multiSegmentPaths != null &&
+                    viewModel.multiSegmentPaths!.isEmpty &&
+                    !viewModel.isSearchingVacancy &&
+                    !viewModel.isSearchingMultiSegment)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.event_busy,
+                            size: 56,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No Seats Available',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _selectedFromStation != null && _selectedToStation != null
+                                ? 'Unfortunately, there are no vacant seats for\n${_getStationDisplay(_selectedFromStation!)} → ${_getStationDisplay(_selectedToStation!)}'
+                                : 'No vacant seats found for this route',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.lightbulb_outline,
+                                  size: 20,
+                                  color: Colors.grey[700],
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Try selecting different stations or check another date',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
 
                 const SizedBox(height: 80),
               ],
@@ -1479,9 +1557,44 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
         const SizedBox(height: 12),
 
         // Coach cards
+        const SizedBox(height: 12),
+
+// Helper hint - shows once
+        Container(
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.touch_app,
+                color: Color(0xFF3B82F6),
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Tap on any seat number to see detailed journey segments',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+// Coach cards
         ...groupedResults.entries.map((entry) {
           return _buildCoachResultCard(entry.key, entry.value);
         }).toList(),
+
       ],
     );
   }
@@ -1595,7 +1708,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                   spacing: 8,
                   runSpacing: 8,
                   children: displayBerths.map((berth) {
-                    return _buildBerthChip(berth);
+                    return buildBerthChip(berth);
                   }).toList(),
                 ),
 
@@ -1643,48 +1756,60 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
   }
 
 
-  Widget _buildBerthChip(VacantBerthResult berth) {
+  Widget buildBerthChip(VacantBerthResult berth) {
     final color = berth.isFullyVacant ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
 
-    return InkWell(
-      onTap: () {
-        _showBerthDetailsDialog(berth);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.3),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showBerthDetailsDialog(berth),
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 1.5,
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.event_seat, color: Colors.white, size: 16),
-            const SizedBox(width: 6),
-            Text(
-              '${berth.berthNo}', // ✅ Only berth number
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.3),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
               ),
-            ),
-            if (berth.hasPartialVacancy) ...[
-              const SizedBox(width: 4),
-              const Icon(Icons.info_outline, color: Colors.white, size: 14),
             ],
-          ],
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.event_seat, color: Colors.white, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  '${berth.berthNo}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  berth.hasPartialVacancy ? Icons.info_outline : Icons.touch_app,
+                  color: Colors.white.withOpacity(0.8),
+                  size: 14,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
+
+
 
   void _showBerthDetailsDialog(VacantBerthResult berth) {
     showDialog(
