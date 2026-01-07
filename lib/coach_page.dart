@@ -427,14 +427,45 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.support_agent,
-                          color: Colors.white,
-                          size: 18,
+                        // Telegram Icon from Icons8
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: Image.network(
+                              'https://img.icons8.com/?size=100&id=7jrHorBRorpX&format=png&color=000000',
+                              width: 24,
+                              height: 24,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF0088CC),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.send,
+                                    color: Colors.white,
+                                    size: 13,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                         const Text(
-                          'Support',
+                          'Join Telegram Support',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 13,
@@ -443,6 +474,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
                         ),
                       ],
                     ),
+
                   ),
                 ),
               ),

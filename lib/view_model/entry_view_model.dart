@@ -506,6 +506,7 @@ class EntryViewModel extends ChangeNotifier {
   }
 
   /// ✅ FIXED: Process single coach for vacancy
+  /// ✅ FIXED: Process single coach for vacancy
   Future<void> _processCoach(
       dynamic coach,
       String fromStation,
@@ -514,13 +515,15 @@ class EntryViewModel extends ChangeNotifier {
       List<VacantBerthResult> results,
       ) async {
     try {
+      // ✅ USE trainStartDate from the first API response
+      final trainStartDate = _trainComposition!['trainStartDate'];
+
       final payload = {
         'trainNo': _trainComposition!['trainNo'],
         'boardingStation': _boardingStation ?? _trainComposition!['from'],
         'remoteStation': _trainComposition!['remote'],
         'trainSourceStation': _trainComposition!['from'],
-        'jDate':
-        DateFormat('yyyy-MM-dd').format(_journeyDate ?? DateTime.now()),
+        'jDate': trainStartDate,  // ✅ CHANGED: Use API's trainStartDate directly
         'coach': coach['coachName'],
         'cls': coach['classCode'],
       };
@@ -541,10 +544,8 @@ class EntryViewModel extends ChangeNotifier {
           List<dynamic> berths = data['bdd'] ?? [];
 
           for (var berth in berths) {
-            // ✅ NEW: Cache ALL vacant segments first (for multi-segment)
             final allSegments = _extractAllVacantSegments(berth, coach);
 
-            // Then check if matches user query (for direct results)
             final matchResult = _analyzeBerthSegments(
               berth,
               fromStation,
@@ -572,6 +573,7 @@ class EntryViewModel extends ChangeNotifier {
       // Silent fail for individual coaches
     }
   }
+
 
   /// ✅ NEW: Extract and cache ALL vacant segments (regardless of user query)
   void _extractAllVacantSegments(Map<String, dynamic> berth, dynamic coach) {
