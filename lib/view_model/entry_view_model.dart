@@ -204,6 +204,7 @@ class EntryViewModel extends ChangeNotifier {
   }
 
   /// Fetch train composition from IRCTC API
+  /// Fetch train composition from IRCTC API
   Future<bool> fetchTrainComposition({
     required String trainNumber,
     required String boardingStation,
@@ -231,6 +232,16 @@ class EntryViewModel extends ChangeNotifier {
         'boardingStation': boardingStation.toUpperCase(),
       };
 
+      print('═══════════════════════════════════════════════════════');
+      print('🚂 FETCH TRAIN COMPOSITION API CALL');
+      print('═══════════════════════════════════════════════════════');
+      print('📤 REQUEST:');
+      print('   URL: https://www.irctc.co.in/online-charts/api/trainComposition');
+      print('   Train Number: $trainNumber');
+      print('   Journey Date: $dateStr');
+      print('   Boarding Station: ${boardingStation.toUpperCase()}');
+      print('───────────────────────────────────────────────────────');
+
       final headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/plain, */*',
@@ -247,15 +258,27 @@ class EntryViewModel extends ChangeNotifier {
         body: jsonEncode(payload),
       ).timeout(const Duration(seconds: 30));
 
+      print('📥 RESPONSE:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Response Body:');
+      print(response.body);
+      print('═══════════════════════════════════════════════════════');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
         if (data['error'] != null && data['error'].toString().isNotEmpty) {
+          print('❌ API ERROR: ${data['error']}');
           _errorMessage = data['error'];
           _isFetchingComposition = false;
           notifyListeners();
           return false;
         }
+
+        print('✅ SUCCESS - Storing data:');
+        print('   Stations List: ${data['stnlist'] ?? "N/A"}');
+        print('   Train Start Date: ${data['trainStartDate'] ?? "N/A"}');
+        print('   Number of Coaches: ${(data['cdd'] ?? []).length}');
 
         _trainComposition = data;
         _coachData = data['cdd'] ?? [];
@@ -264,18 +287,21 @@ class EntryViewModel extends ChangeNotifier {
         notifyListeners();
         return true;
       } else {
+        print('❌ HTTP ERROR: ${response.statusCode}');
         _errorMessage = 'Failed to fetch data. Status: ${response.statusCode}';
         _isFetchingComposition = false;
         notifyListeners();
         return false;
       }
     } catch (e) {
+      print('❌ EXCEPTION in fetchTrainComposition: $e');
       _errorMessage = 'Error:Please Try Again';
       _isFetchingComposition = false;
       notifyListeners();
       return false;
     }
   }
+
 
   /// OPTIMIZED: Search for vacant berths with smart segment matching
   Future<bool> searchVacantBerths({
@@ -335,19 +361,19 @@ class EntryViewModel extends ChangeNotifier {
       _vacantBerths = results;
       _isSearchingVacancy = false;
 
-     //print('✅ Direct search complete: ${results.length} berths found');
-     //print('📦 Segment cache size: ${_segmentCache.length} segments');
+     print('✅ Direct search complete: ${results.length} berths found');
+     print('📦 Segment cache size: ${_segmentCache.length} segments');
 
       // NEW: If no direct seats found, automatically search for multi-segment paths
       if (results.isEmpty) {
-       //print('🔄 No direct seats, searching multi-segment paths...');
+       print('🔄 No direct seats, searching multi-segment paths...');
         await _searchMultiSegmentPaths(fromStationUpper, toStationUpper);
       }
 
       notifyListeners();
       return true;
     } catch (e) {
-     //print('❌ Search error: $e');
+     print('❌ Search error: $e');
       _errorMessage = 'Search failed';
       _isSearchingVacancy = false;
       notifyListeners();
@@ -364,15 +390,15 @@ class EntryViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-     //print('🔍 Starting multi-segment search: $fromStation → $toStation');
+     print('🔍 Starting multi-segment search: $fromStation → $toStation');
 
       // Build graph of all possible segments with available seats
       final segmentGraph = _buildSegmentGraph();
 
-     //print('📊 Graph has ${segmentGraph.length} nodes');
+     print('📊 Graph has ${segmentGraph.length} nodes');
 
       if (segmentGraph.isEmpty) {
-       //print('❌ Graph is empty, no paths possible');
+       print('❌ Graph is empty, no paths possible');
         _multiSegmentPaths = [];
         _isSearchingMultiSegment = false;
         notifyListeners();
@@ -382,13 +408,13 @@ class EntryViewModel extends ChangeNotifier {
       // Use BFS to find optimal paths
       final paths = _findOptimalPaths(segmentGraph, fromStation, toStation);
 
-     //print('✅ Found ${paths.length} alternative paths');
+     print('✅ Found ${paths.length} alternative paths');
 
       _multiSegmentPaths = paths;
       _isSearchingMultiSegment = false;
       notifyListeners();
     } catch (e) {
-     //print('❌ Multi-segment error: $e');
+     print('❌ Multi-segment error: $e');
       _multiSegmentPaths = [];
       _isSearchingMultiSegment = false;
       notifyListeners();
@@ -399,7 +425,7 @@ class EntryViewModel extends ChangeNotifier {
   Map<String, Map<String, List<VacantBerthResult>>> _buildSegmentGraph() {
     final graph = <String, Map<String, List<VacantBerthResult>>>{};
 
-   //print('🔨 Building graph from ${_segmentCache.length} cached segments');
+   print('🔨 Building graph from ${_segmentCache.length} cached segments');
 
     // Use cached berth data from the initial search
     for (var entry in _segmentCache.entries) {
@@ -417,7 +443,7 @@ class EntryViewModel extends ChangeNotifier {
       graph.putIfAbsent(from, () => {});
       graph[from]![to] = berths;
 
-     //print('  📍 $from → $to: ${berths.length} seats');
+     print('  📍 $from → $to: ${berths.length} seats');
     }
 
     return graph;
@@ -429,7 +455,7 @@ class EntryViewModel extends ChangeNotifier {
       String start,
       String end,
       ) {
-   //print('🚀 BFS from $start to $end');
+   print('🚀 BFS from $start to $end');
 
     final paths = <MultiSegmentPath>[];
     final queue = Queue<_PathState>();
@@ -456,7 +482,7 @@ class EntryViewModel extends ChangeNotifier {
           pathDescription: _buildPathDescription(state.segments),
         );
         paths.add(path);
-       //print('  ✅ Path ${paths.length}: ${path.pathDescription}');
+       print('  ✅ Path ${paths.length}: ${path.pathDescription}');
         continue;
       }
 

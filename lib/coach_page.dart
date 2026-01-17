@@ -23,12 +23,27 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
   Map<int, bool> _expandedSegments = {};
 
+
+  // NEW: Search controllers for FROM/TO stations
+  final _fromStationSearchController = TextEditingController();
+  final _toStationSearchController = TextEditingController();
+  final _fromStationSearchFocusNode = FocusNode();
+  final _toStationSearchFocusNode = FocusNode();
+  OverlayEntry? _fromStationOverlayEntry;
+  OverlayEntry? _toStationOverlayEntry;
+  final LayerLink _fromStationLayerLink = LayerLink();
+  final LayerLink _toStationLayerLink = LayerLink();
+  bool _manualStationSearch = false;
+
+
+
   // ✅ NEW: Station code to name mapping
   Map<String, String> _stationNames = {};
 
   Map<String, bool> _expandedCoaches = {};
 
   @override
+
   void initState() {
     super.initState();
     _animationController = AnimationController(
@@ -41,8 +56,19 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
     );
 
     _animationController.forward();
-    _loadStations(); // ✅ NEW
+    _loadStations(); // Load station names for display
+
+    // NEW: Check if API provided stations
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final viewModel = context.read<EntryViewModel>();
+      if (viewModel.stationsList.isEmpty) {
+        setState(() {
+          _manualStationSearch = true;
+        });
+      }
+    });
   }
+
 
   // Add this method anywhere in CoachPageState class
   void _openTelegramSupport() async {
@@ -121,26 +147,31 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
   }
 
   @override
+
   void dispose() {
     _animationController.dispose();
+    _fromStationSearchController.dispose();
+    _toStationSearchController.dispose();
+    _fromStationSearchFocusNode.dispose();
+    _toStationSearchFocusNode.dispose();
+    _removeFromStationOverlay();
+    _removeToStationOverlay();
     super.dispose();
   }
 
+
   // Get stations for TO dropdown (only stations AFTER FROM station)
   List<String> getToStations(List<String> allStations) {
-    // ✅ Return empty list if no FROM station selected
     if (_selectedFromStation == null || allStations.isEmpty) {
       return [];
     }
 
     final fromIndex = allStations.indexOf(_selectedFromStation!);
 
-    // ✅ Return empty if FROM station not found or is last station
     if (fromIndex == -1 || fromIndex >= allStations.length - 1) {
       return [];
     }
 
-    // Return stations after FROM station
     final toStations = allStations.sublist(fromIndex + 1);
     //print('TO stations available: $toStations');
     return toStations;
@@ -1252,9 +1283,9 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
       ),
     );
   }
-
   Widget _buildSearchSection(List<String> stations, EntryViewModel viewModel) {
-    final toStations = getToStations(stations);
+    final hasAPIStations = stations.isNotEmpty && !_manualStationSearch;
+    final List<String> toStations = hasAPIStations ? getToStations(stations) : [];
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -1297,83 +1328,10 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
           const SizedBox(height: 24),
 
-          // FROM Station Dropdown
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'FROM Station (Your Boarding Point)',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButtonFormField<String>(
-                  value: _selectedFromStation,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.location_on, color: Color(0xFF10B981), size: 20),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                  hint: Text(
-                    'Select starting station',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 14),
-                  ),
-                  // ✅ Custom selected item builder
-                  selectedItemBuilder: (BuildContext context) {
-                    return stations.map<Widget>((String station) {
-                      return Text(
-                        _getStationDisplay(station),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF1F2937),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      );
-                    }).toList();
-                  },
-                  icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF10B981)),
-                  isExpanded: true,
-                  dropdownColor: Colors.white,
-                  items: stations.map<DropdownMenuItem<String>>((String station) {
-                    return DropdownMenuItem<String>(
-                      value: station, // ✅ Backend uses CODE
-                      child: Text(
-                        _getStationDisplay(station), // ✅ Display NAME (CODE)
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF1F2937),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (String? value) {
-                    setState(() {
-                      _selectedFromStation = value;
-                      _selectedToStation = null;
-                    });
-                    viewModel.clearVacantBerths();
-                    //print('✅ FROM station selected: $value');
-                  },
-                ),
-              ),
-            ],
-          ),
+          // FROM Station Field
+          hasAPIStations
+              ? _buildFromDropdown(stations, viewModel)
+              : _buildFromSearchField(),
 
           const SizedBox(height: 16),
 
@@ -1395,152 +1353,706 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
           const SizedBox(height: 16),
 
-          // TO Station Dropdown (filtered)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'TO Station (Where You Want to Get Down)',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: _selectedFromStation == null
-                      ? Colors.white.withOpacity(0.5)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButtonFormField<String>(
-                  value: _selectedToStation,
-                  decoration: InputDecoration(
-                    prefixIcon: Icon(
-                      Icons.flag,
-                      color: _selectedFromStation == null
-                          ? Colors.grey[400]
-                          : const Color(0xFF10B981),
-                      size: 20,
-                    ),
-                    filled: true,
-                    fillColor: _selectedFromStation == null
-                        ? Colors.white.withOpacity(0.5)
-                        : Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                  hint: Text(
-                    _selectedFromStation == null
-                        ? 'Select FROM station first'
-                        : 'Select destination station',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 14),
-                  ),
-                  // ✅ Custom selected item builder
-                  selectedItemBuilder: (BuildContext context) {
-                    return toStations.map<Widget>((String station) {
-                      return Text(
-                        _getStationDisplay(station),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF1F2937),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      );
-                    }).toList();
-                  },
-                  icon: Icon(
-                    Icons.arrow_drop_down,
-                    color: _selectedFromStation == null
-                        ? Colors.grey[400]
-                        : const Color(0xFF10B981),
-                  ),
-                  isExpanded: true,
-                  dropdownColor: Colors.white,
-                  items: toStations.isEmpty
-                      ? null
-                      : toStations.map<DropdownMenuItem<String>>((String station) {
-                    return DropdownMenuItem<String>(
-                      value: station, // ✅ Backend uses CODE
-                      child: Text(
-                        _getStationDisplay(station), // ✅ Display NAME (CODE)
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF1F2937),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: _selectedFromStation == null
-                      ? null
-                      : (String? value) {
-                    setState(() {
-                      _selectedToStation = value;
-                    });
-                    viewModel.clearVacantBerths();
-                    //print('✅ TO station selected: $value');
-                  },
-                ),
-              ),
-              if (_selectedFromStation != null && toStations.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '${toStations.length} stations available after ${_getStationDisplay(_selectedFromStation!)}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-            ],
-          ),
+          // TO Station Field
+          hasAPIStations
+              ? _buildToDropdown(toStations, viewModel)
+              : _buildToSearchField(),
 
           const SizedBox(height: 24),
 
           // Search Button
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton.icon(
-              onPressed: viewModel.isSearchingVacancy ? null : _handleSearch,
-              icon: viewModel.isSearchingVacancy
-                  ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFF10B981),
-                ),
-              )
-                  : const Icon(Icons.search, size: 20),
-              label: Text(
-                viewModel.isSearchingVacancy ? 'Searching...' : 'Find Vacant Berths',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF10B981),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ),
+          _buildSearchButton(viewModel),
         ],
       ),
     );
+  }
+
+  // Dropdown for FROM station (when API works)
+  Widget _buildFromDropdown(List<String> stations, EntryViewModel viewModel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'FROM Station (Your Boarding Point)',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonFormField<String>(
+            value: _selectedFromStation,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.location_on, color: Color(0xFF10B981), size: 20),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            hint: Text(
+              'Select starting station',
+              style: TextStyle(color: Colors.grey[400], fontSize: 14),
+            ),
+            selectedItemBuilder: (BuildContext context) {
+              return stations.map<Widget>((String station) {
+                return Text(
+                  _getStationDisplay(station),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF1F2937),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                );
+              }).toList();
+            },
+            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF10B981)),
+            isExpanded: true,
+            dropdownColor: Colors.white,
+            items: stations.map<DropdownMenuItem<String>>((String station) {
+              return DropdownMenuItem<String>(
+                value: station,
+                child: Text(
+                  _getStationDisplay(station),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF1F2937),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (String? value) {
+              setState(() {
+                _selectedFromStation = value;
+                _selectedToStation = null;
+              });
+              viewModel.clearVacantBerths();
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+// Dropdown for TO station (when API works)
+  Widget _buildToDropdown(List<String> toStations, EntryViewModel viewModel) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'TO Station (Your Destination)',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonFormField<String>(
+            value: _selectedToStation,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.location_on, color: Color(0xFF10B981), size: 20),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            hint: Text(
+              toStations.isEmpty ? 'Select FROM station first' : 'Select destination',
+              style: TextStyle(color: Colors.grey[400], fontSize: 14),
+            ),
+            selectedItemBuilder: (BuildContext context) {
+              return toStations.map<Widget>((String station) {
+                return Text(
+                  _getStationDisplay(station),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF1F2937),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                );
+              }).toList();
+            },
+            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF10B981)),
+            isExpanded: true,
+            dropdownColor: Colors.white,
+            items: toStations.isEmpty
+                ? []
+                : toStations.map<DropdownMenuItem<String>>((String station) {
+              return DropdownMenuItem<String>(
+                value: station,
+                child: Text(
+                  _getStationDisplay(station),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF1F2937),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: toStations.isEmpty
+                ? null
+                : (String? value) {
+              setState(() {
+                _selectedToStation = value;
+              });
+              viewModel.clearVacantBerths();
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+// Search field for FROM station (when API fails)
+  Widget _buildFromSearchField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'FROM Station (Your Boarding Point)',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return CompositedTransformTarget(
+              link: _fromStationLayerLink,
+              child: TextFormField(
+                controller: _fromStationSearchController,
+                focusNode: _fromStationSearchFocusNode,
+                style: const TextStyle(fontSize: 15),
+                onTap: () {
+                  if (_fromStationSearchController.text.trim().isNotEmpty) {
+                    _showFromStationOverlay(context, constraints);
+                  }
+                },
+                onChanged: (value) {
+                  if (_selectedFromStation != null &&
+                      value != _getStationDisplay(_selectedFromStation!)) {
+                    setState(() {
+                      _selectedFromStation = null;
+                      _selectedToStation = null;
+                    });
+                  }
+                  if (value.trim().isNotEmpty) {
+                    _showFromStationOverlay(context, constraints);
+                  } else {
+                    _removeFromStationOverlay();
+                  }
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search by station name or code',
+                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                  prefixIcon: const Icon(Icons.search, color: Colors.white, size: 20),
+                  suffixIcon: _fromStationSearchController.text.isNotEmpty
+                      ? IconButton(
+                    icon: Icon(Icons.clear, color: Colors.grey[400], size: 20),
+                    onPressed: () {
+                      _fromStationSearchController.clear();
+                      setState(() {
+                        _selectedFromStation = null;
+                        _selectedToStation = null;
+                      });
+                      _removeFromStationOverlay();
+                      _fromStationSearchFocusNode.requestFocus();
+                    },
+                  )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: _selectedFromStation != null
+                          ? const Color(0xFF10B981)
+                          : Colors.white,
+                      width: _selectedFromStation != null ? 2 : 1,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+            );
+          },
+        ),
+        if (_selectedFromStation != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.5),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 16,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _getStationDisplay(_selectedFromStation!),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+// Search field for TO station (when API fails)
+  Widget _buildToSearchField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'TO Station (Your Destination)',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return CompositedTransformTarget(
+              link: _toStationLayerLink,
+              child: TextFormField(
+                controller: _toStationSearchController,
+                focusNode: _toStationSearchFocusNode,
+                style: const TextStyle(fontSize: 15),
+                onTap: () {
+                  if (_toStationSearchController.text.trim().isNotEmpty) {
+                    _showToStationOverlay(context, constraints);
+                  }
+                },
+                onChanged: (value) {
+                  if (_selectedToStation != null &&
+                      value != _getStationDisplay(_selectedToStation!)) {
+                    setState(() {
+                      _selectedToStation = null;
+                    });
+                  }
+                  if (value.trim().isNotEmpty) {
+                    _showToStationOverlay(context, constraints);
+                  } else {
+                    _removeToStationOverlay();
+                  }
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search by station name or code',
+                  hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                  prefixIcon: const Icon(Icons.search, color: Colors.white, size: 20),
+                  suffixIcon: _toStationSearchController.text.isNotEmpty
+                      ? IconButton(
+                    icon: Icon(Icons.clear, color: Colors.grey[400], size: 20),
+                    onPressed: () {
+                      _toStationSearchController.clear();
+                      setState(() {
+                        _selectedToStation = null;
+                      });
+                      _removeToStationOverlay();
+                      _toStationSearchFocusNode.requestFocus();
+                    },
+                  )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: _selectedToStation != null
+                          ? const Color(0xFF10B981)
+                          : Colors.white,
+                      width: _selectedToStation != null ? 2 : 1,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+            );
+          },
+        ),
+        if (_selectedToStation != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.5),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 16,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _getStationDisplay(_selectedToStation!),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+// Search button
+  Widget _buildSearchButton(EntryViewModel viewModel) {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: viewModel.isSearchingVacancy || viewModel.isSearchingMultiSegment
+            ? null
+            : _handleSearch,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF10B981),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+        ),
+        child: viewModel.isSearchingVacancy || viewModel.isSearchingMultiSegment
+            ? const SizedBox(
+          height: 20,
+          width: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
+          ),
+        )
+            : const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search, size: 20),
+            SizedBox(width: 8),
+            Text(
+              'Search Vacant Berths',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+// Overlay methods for FROM station
+  void _showFromStationOverlay(BuildContext context, BoxConstraints constraints) {
+    _removeFromStationOverlay();
+
+    final searchText = _fromStationSearchController.text.trim();
+    if (searchText.isEmpty) return;
+
+    final lowerSearchText = searchText.toLowerCase();
+    final matches = _stationNames.entries.where((entry) {
+      final code = entry.key.toLowerCase();
+      final name = entry.value.toLowerCase();
+      return code.contains(lowerSearchText) || name.contains(lowerSearchText);
+    }).take(10).toList();
+
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    _fromStationOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: size.width,
+        child: CompositedTransformFollower(
+          link: _fromStationLayerLink,
+          showWhenUnlinked: false,
+          offset: Offset(0, size.height + 4),
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(10),
+            child: matches.isEmpty
+                ? Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.3)),
+                color: const Color(0xFFEF4444).withOpacity(0.05),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red[400], size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No matching stations found',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.red[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+                : ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 250),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shrinkWrap: true,
+                itemCount: matches.length,
+                itemBuilder: (context, index) {
+                  final entry = matches[index];
+                  final code = entry.key;
+                  final name = entry.value;
+
+                  return InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectedFromStation = code;
+                        _fromStationSearchController.text = _getStationDisplay(code);
+                        _selectedToStation = null;
+                        _toStationSearchController.clear();
+                      });
+                      _removeFromStationOverlay();
+                      _fromStationSearchFocusNode.unfocus();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _selectedFromStation == code
+                            ? const Color(0xFF6366F1).withOpacity(0.1)
+                            : Colors.transparent,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6366F1).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              code,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF6366F1),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF374151),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_fromStationOverlayEntry!);
+  }
+
+  void _removeFromStationOverlay() {
+    _fromStationOverlayEntry?.remove();
+    _fromStationOverlayEntry = null;
+  }
+
+// Overlay methods for TO station
+  void _showToStationOverlay(BuildContext context, BoxConstraints constraints) {
+    _removeToStationOverlay();
+
+    final searchText = _toStationSearchController.text.trim();
+    if (searchText.isEmpty) return;
+
+    final lowerSearchText = searchText.toLowerCase();
+    final matches = _stationNames.entries.where((entry) {
+      final code = entry.key.toLowerCase();
+      final name = entry.value.toLowerCase();
+      return code.contains(lowerSearchText) || name.contains(lowerSearchText);
+    }).take(10).toList();
+
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    _toStationOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: size.width,
+        child: CompositedTransformFollower(
+          link: _toStationLayerLink,
+          showWhenUnlinked: false,
+          offset: Offset(0, size.height + 4),
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(10),
+            child: matches.isEmpty
+                ? Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.3)),
+                color: const Color(0xFFEF4444).withOpacity(0.05),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red[400], size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No matching stations found',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.red[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+                : ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 250),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shrinkWrap: true,
+                itemCount: matches.length,
+                itemBuilder: (context, index) {
+                  final entry = matches[index];
+                  final code = entry.key;
+                  final name = entry.value;
+
+                  return InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectedToStation = code;
+                        _toStationSearchController.text = _getStationDisplay(code);
+                      });
+                      _removeToStationOverlay();
+                      _toStationSearchFocusNode.unfocus();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _selectedToStation == code
+                            ? const Color(0xFF6366F1).withOpacity(0.1)
+                            : Colors.transparent,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6366F1).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              code,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF6366F1),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF374151),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_toStationOverlayEntry!);
+  }
+
+  void _removeToStationOverlay() {
+    _toStationOverlayEntry?.remove();
+    _toStationOverlayEntry = null;
   }
 
 
