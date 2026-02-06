@@ -84,13 +84,13 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
   void _startPeriodicShareDialog() {
     // Show first dialog after 2 seconds
-    Future.delayed(const Duration(seconds: 2), () {
+    Future.delayed(const Duration(seconds: 5), () {
       _showShareDialogIfAllowed();
     });
 
     // Then alternate every 20 seconds
     _shareDialogTimer = Timer.periodic(
-      const Duration(seconds: 20),
+      const Duration(seconds: 30),
           (timer) {
         _showShareDialogIfAllowed();
       },
@@ -103,7 +103,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
     if (_lastDialogShown != null) {
       final timeSinceLastDialog = DateTime.now().difference(_lastDialogShown!);
-      if (timeSinceLastDialog.inSeconds < 15) return;
+      if (timeSinceLastDialog.inSeconds < 25) return;
     }
 
     _lastDialogShown = DateTime.now();
