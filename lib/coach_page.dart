@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -42,6 +44,12 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
   Map<String, bool> _expandedCoaches = {};
 
+  Timer? _shareDialogTimer;
+  DateTime? _lastDialogShown;
+  bool _isDialogCurrentlyShowing = false;
+
+
+
   @override
 
   void initState() {
@@ -67,8 +75,210 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
         });
       }
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startPeriodicShareDialog();
+    });
   }
 
+  void _startPeriodicShareDialog() {
+    // Show immediately on page load
+    Future.delayed(const Duration(seconds: 2), () {
+      _showShareDialogIfAllowed();
+    });
+
+    // Then show every 20 seconds
+    _shareDialogTimer = Timer.periodic(
+      const Duration(seconds: 20), // Change to 15 if you prefer
+          (timer) {
+        _showShareDialogIfAllowed();
+      },
+    );
+  }
+
+  // ✅ Check if we can show dialog (don't show if already showing)
+  void _showShareDialogIfAllowed() {
+    if (_isDialogCurrentlyShowing) return;
+
+    // Optional: Add cooldown to prevent spam
+    if (_lastDialogShown != null) {
+      final timeSinceLastDialog = DateTime.now().difference(_lastDialogShown!);
+      if (timeSinceLastDialog.inSeconds < 30) return; // Minimum 15 sec gap
+    }
+
+    _lastDialogShown = DateTime.now();
+    _showShareDialog();
+  }
+
+  // ✅ Modified dialog with tracking
+  void _showShareDialog() {
+    if (!mounted) return;
+
+    _isDialogCurrentlyShowing = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+
+              // Icon and Title
+              const Icon(
+                Icons.favorite,
+                color: Colors.white,
+                size: 56,
+              ),
+              const SizedBox(height: 16),
+
+              const Text(
+                'Love KaliRailSeat?',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 12),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  'Help your friends find vacant train seats easily! Share this amazing tool with them.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.9),
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // WhatsApp Share Button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _shareOnWhatsApp();
+                    },
+                    icon: Image.network(
+                      'https://img.icons8.com/?size=100&id=16713&format=png&color=FFFFFF',
+                      width: 24,
+                      height: 24,
+                      errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.share, color: Colors.white),
+                    ),
+                    label: const Text(
+                      'Share on WhatsApp',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 4,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+
+            ],
+          ),
+        ),
+      ),
+    ).then((_) {
+      // ✅ Track when dialog closes
+      _isDialogCurrentlyShowing = false;
+    });
+  }
+
+  // ✅ WhatsApp share function
+  void _shareOnWhatsApp() async {
+    final message = '''
+ *KaliRailSeat* - Find Vacant Train Seats! 
+
+Check which train seats are actually vacant between your boarding and destination stations, even after the reservation chart is prepared.
+
+ Real-time vacancy data
+ Smart segment matching
+ Multi-segment journey finder
+
+Try it now: https://kalirailseat.com
+
+    '''.trim();
+
+    final encodedMessage = Uri.encodeComponent(message);
+    final whatsappUrl = 'https://wa.me/?text=$encodedMessage';
+
+    try {
+      final url = Uri.parse(whatsappUrl);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          showSnackBar('Could not open WhatsApp', isError: true);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        showSnackBar('Error opening WhatsApp', isError: true);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    // ✅ IMPORTANT: Cancel timer when leaving page
+    _shareDialogTimer?.cancel();
+    _animationController.dispose();
+    _fromStationSearchController.dispose();
+    _toStationSearchController.dispose();
+    _fromStationSearchFocusNode.dispose();
+    _toStationSearchFocusNode.dispose();
+    _removeFromStationOverlay();
+    _removeToStationOverlay();
+    super.dispose();
+  }
 
   // Add this method anywhere in CoachPageState class
   void _openTelegramSupport() async {
@@ -92,6 +302,9 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
       ),
     );
   }
+
+
+
 
 
   // ✅ NEW: Load station names
@@ -148,16 +361,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
 
   @override
 
-  void dispose() {
-    _animationController.dispose();
-    _fromStationSearchController.dispose();
-    _toStationSearchController.dispose();
-    _fromStationSearchFocusNode.dispose();
-    _toStationSearchFocusNode.dispose();
-    _removeFromStationOverlay();
-    _removeToStationOverlay();
-    super.dispose();
-  }
+
 
 
   // Get stations for TO dropdown (only stations AFTER FROM station)
@@ -2173,35 +2377,167 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
         const SizedBox(height: 12),
 
 // Helper hint - shows once
-        Container(
-          padding: const EdgeInsets.all(12),
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFEFF6FF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.touch_app,
-                color: Color(0xFF3B82F6),
-                size: 20,
+        // ✅ REPLACE the existing info container with this enhanced version
+        Column(
+          children: [
+            // Existing tap instruction
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Tap on any seat number to see detailed journey segments',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.w500,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.touch_app,
+                    color: Color(0xFF3B82F6),
+                    size: 20,
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Tap on any seat number to see detailed journey segments',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ✅ NEW: Color legend info
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFFFFF7ED),
+                    const Color(0xFFECFDF5),
+                  ],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFFB923C).withOpacity(0.3),
+                  width: 1.5,
                 ),
               ),
-            ],
-          ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.lightbulb_outline,
+                        color: Color(0xFFF97316),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Pro Tip',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[800],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Orange seats explanation
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        margin: const EdgeInsets.only(top: 5, right: 8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFB923C),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      Expanded(
+                        child: RichText(
+                          text: TextSpan(
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                              height: 1.4,
+                            ),
+                            children: const [
+                              TextSpan(
+                                text: 'Orange seats ',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFF97316),
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'have higher vacancy probability',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // Green seats explanation
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        margin: const EdgeInsets.only(top: 5, right: 8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      Expanded(
+                        child: RichText(
+                          text: TextSpan(
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                              height: 1.4,
+                            ),
+                            children: const [
+                              TextSpan(
+                                text: 'Green seats ',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF10B981),
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'might be booked in Tatkal quota',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
+
 
 // Coach cards
         ...groupedResults.entries.map((entry) {
