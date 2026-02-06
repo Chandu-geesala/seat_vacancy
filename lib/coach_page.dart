@@ -22,6 +22,7 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
   String? _selectedFromStation;
   String? _selectedToStation;
   bool _isInitialized = false;
+  bool _showWhatsAppDialog = true; // Start with WhatsApp
 
   Map<int, bool> _expandedSegments = {};
 
@@ -82,33 +83,298 @@ class _CoachPageState extends State<CoachPage> with SingleTickerProviderStateMix
   }
 
   void _startPeriodicShareDialog() {
-    // Show immediately on page load
+    // Show first dialog after 2 seconds
     Future.delayed(const Duration(seconds: 2), () {
       _showShareDialogIfAllowed();
     });
 
-    // Then show every 20 seconds
+    // Then alternate every 20 seconds
     _shareDialogTimer = Timer.periodic(
-      const Duration(seconds: 20), // Change to 15 if you prefer
+      const Duration(seconds: 20),
           (timer) {
         _showShareDialogIfAllowed();
       },
     );
   }
 
-  // ✅ Check if we can show dialog (don't show if already showing)
+
   void _showShareDialogIfAllowed() {
     if (_isDialogCurrentlyShowing) return;
 
-    // Optional: Add cooldown to prevent spam
     if (_lastDialogShown != null) {
       final timeSinceLastDialog = DateTime.now().difference(_lastDialogShown!);
-      if (timeSinceLastDialog.inSeconds < 30) return; // Minimum 15 sec gap
+      if (timeSinceLastDialog.inSeconds < 15) return;
     }
 
     _lastDialogShown = DateTime.now();
-    _showShareDialog();
+
+    // ✅ Alternate between dialogs
+    if (_showWhatsAppDialog) {
+      _showWhatsAppShareDialog();
+    } else {
+      _showTelegramJoinDialog();
+    }
+
+    // Toggle for next time
+    _showWhatsAppDialog = !_showWhatsAppDialog;
   }
+
+  void _showWhatsAppShareDialog() {
+    if (!mounted) return;
+
+    _isDialogCurrentlyShowing = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF25D366), Color(0xFF128C7E)], // WhatsApp colors
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+
+              // WhatsApp Icon
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Image.network(
+                  'https://img.icons8.com/?size=100&id=16713&format=png&color=FFFFFF',
+                  width: 56,
+                  height: 56,
+                  errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.share, color: Colors.white, size: 56),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              const Text(
+                'Share with Friends!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 12),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  'Help your friends find vacant train seats easily! Share KaliRailSeat on WhatsApp.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.95),
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Share Button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _shareOnWhatsApp();
+                    },
+                    icon: const Icon(Icons.share, size: 20),
+                    label: const Text(
+                      'Share on WhatsApp',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF25D366),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 4,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+
+            ],
+          ),
+        ),
+      ),
+    ).then((_) {
+      _isDialogCurrentlyShowing = false;
+    });
+  }
+
+  // ✅ Telegram Join Dialog
+  void _showTelegramJoinDialog() {
+    if (!mounted) return;
+
+    _isDialogCurrentlyShowing = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0088CC), Color(0xFF006BA6)], // Telegram colors
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+
+              // Telegram Icon
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Image.network(
+                  'https://img.icons8.com/?size=100&id=oWiuH0jFiU0R&format=png&color=FFFFFF',
+                  width: 56,
+                  height: 56,
+                  errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.telegram, color: Colors.white, size: 56),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              const Text(
+                'Join Our Community!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 12),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  'Get instant support, updates, and tips. Join our Telegram community now!',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.95),
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Join Button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      openTelegramSupport();
+                    },
+                    icon: const Icon(Icons.group_add, size: 20),
+                    label: const Text(
+                      'Join Telegram Community',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF0088CC),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 4,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+
+            ],
+          ),
+        ),
+      ),
+    ).then((_) {
+      _isDialogCurrentlyShowing = false;
+    });
+  }
+
+
+  void openTelegramSupport() async {
+    final url = Uri.parse('https://t.me/+UyTq6xPWZBtmN2Y1');// Your link
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      showSnackBar('Could not open Telegram link', isError: true);
+    }
+  }
+
+
 
   // ✅ Modified dialog with tracking
   void _showShareDialog() {
